@@ -33,7 +33,7 @@ expect("plan zoom persists with the workspace layout", app.includes("planZoom: 1
 expect("zoom shrinks the ortho extent, not the pane", dualview.includes("planZoom = 1") && dualview.includes("PLAN_EXTENT / Math.max(0.25, planZoom)"));
 expect("demand loop wakes on mount and model commit", dualview.includes("requestAnimationFrame(() => requestAnimationFrame(invalidate))") && app.includes("const frame = requestAnimationFrame(invalidate);"));
 expect("double-click no longer swaps Scene and Top-View", !app.includes('setViewMode((current) => (current === "plan" ? "shot" : "plan"))'));
-expect("Scene toolbar exposes shot preset, aspect, FOV, recenter, and Top-View controls", app.includes("viewport-toolbar-field shot-field") && app.includes("SHOT_ASPECT_PRESETS") && app.includes("viewport-fov-control") && app.includes("Recenter on subject") && app.includes('ko("Top", "탑")'));
+expect("Scene toolbar exposes shot preset, aspect, FOV, recenter, and Top-View controls", app.includes("viewport-toolbar-field shot-field") && app.includes("SHOT_ASPECT_PRESETS") && app.includes("viewport-fov-control") && app.includes("Recenter on subject") && app.includes('ko("Top", "탑"'));
 expect("Scene and PlayView tools share one horizontal title bar", app.includes('className="viewport-titlebar"') && css.includes(".viewport-titlebar") && css.includes("position: static"));
 expect("PlayView toolbar exposes framing readouts, playback, and recording", app.includes("editor-toolbar play-tools") && app.includes("shotOutput.label") && app.includes("toggleShotRecording"));
 // Letterbox bars are editor chrome. Painting them with the scene background
@@ -48,7 +48,7 @@ expect(
 );
 expect(
 	"the scene draw is scissored to the image so the bars survive it",
-	dualview.includes("gl.setScissor(img.x, imgY, img.w, img.h);\n\t\t\tgl.setViewport(img.x, imgY, img.w, img.h);"),
+	dualview.replace(/\r\n/g, "\n").includes("gl.setScissor(img.x, imgY, img.w, img.h);\n\t\t\tgl.setViewport(img.x, imgY, img.w, img.h);"),
 );
 expect("selected aspect reaches the shot renderer", app.includes("shotAspect={shotOutput.aspect}") && dualview.includes("shotAspect = SHOT_ASPECT") && dualview.includes("fitAspect(mainRect, shotAspect)"));
 expect("video and still capture use the selected output dimensions", app.includes("width: shotOutput.width") && app.includes("width={shotOutput.width}") && app.includes("canvas.width = shotOutput.width"));
@@ -64,15 +64,15 @@ expect("ARDY status stays inline without a console history surface", app.include
 // The sidebar has no tabs: one Inspector, driven by the hierarchy selection,
 // so every panel is reached by selecting the thing that owns it.
 expect("the sidebar has no mode tabs left", !app.includes("sidebarTab") && !app.includes("inspector-tabs") && !css.includes(".inspector-tabs"));
-expect("the legacy ARDY motion inspector card is removed", !app.includes('title={ko("ARDY motion", "ARDY 모션")}'));
-expect("the camera owns the lens controls", app.includes('<Foldout hidden={!isCameraSelection} title={ko("Camera", "카메라")}>'));
+expect("the legacy ARDY motion inspector card is removed", !app.includes('title={ko("ARDY motion", "ARDY 모션"'));
+expect("the camera owns the lens controls", app.includes('<Foldout hidden={!isCameraSelection} title={ko("Camera", "카메라"'));
 expect(
 	"the legacy image/video generation prompt inspector is removed",
-	!app.includes('<Foldout hidden={!(isSceneSelection || isCharacterSelection)} title={ko("Prompt", "프롬프트")}>'),
+	!app.includes('<Foldout hidden={!(isSceneSelection || isCharacterSelection)} title={ko("Prompt", "프롬프트"'),
 );
 expect(
 	"the prompt does not leak onto selections that do not own it",
-	!app.includes('hidden={!isCameraSelection} title={ko("Prompt"') && app.includes('<Foldout hidden={!isCameraSelection} title={ko("Camera", "카메라")}>'),
+	!app.includes('hidden={!isCameraSelection} title={ko("Prompt"') && app.includes('<Foldout hidden={!isCameraSelection} title={ko("Camera", "카메라"'),
 );
 expect("selection routing is derived once, not repeated per foldout", app.includes("const isCharacterSelection = selectedHierarchyId ===") && app.includes("const inspectorHasContent ="));
 expect("an unowned selection explains itself instead of showing a blank column", app.includes("data-inspector-empty") && css.includes(".inspector-empty"));
@@ -220,10 +220,10 @@ expect(
 	"Top-View shows ARDY player endpoints and direction while composing a rail",
 	planview.includes("function SubjectMovementGuide") &&
 	planview.includes("directionTriangle") &&
-	planview.includes('ko("ARDY START", "ARDY 시작")') &&
-	planview.includes('ko("ARDY END", "ARDY 끝")') &&
+	planview.includes('ko("ARDY START", "ARDY 시작"') &&
+	planview.includes('ko("ARDY END", "ARDY 끝"') &&
 	planview.includes("point.x.toFixed(1)") &&
-	planview.includes('ko("PLAYER STILL", "플레이어 정지")') &&
+	planview.includes('ko("PLAYER STILL", "플레이어 정지"') &&
 	planview.includes("(railDraw || cameraRailPoints) && <SubjectMovementGuide"),
 );
 expect(
@@ -239,12 +239,12 @@ expect(
 // scrub, viewport gizmo) agree on max(0, y).
 expect(
 	"Subject transforms have one inspector home with the direct tools",
-	app.includes('<Foldout hidden={!isCharacterSelection} title={ko("Transform", "변환")}>') &&
+	app.includes('<Foldout hidden={!isCharacterSelection} title={ko("Transform", "변환"') &&
 	app.includes('{ axis: "X", value: activeChar.x, step: 0.05') &&
 	app.includes('{ axis: "Y", value: activeChar.y ?? 0, step: 0.05') &&
 	app.includes('{ axis: "Z", value: activeChar.z, step: 0.05') &&
-	app.includes('label={ko("Rotation", "회전")}') &&
-	app.includes('label={ko("Scale", "크기")}') &&
+	app.includes('label={ko("Rotation", "회전"') &&
+	app.includes('label={ko("Scale", "크기"') &&
 	app.includes('data-transform-controls'),
 );
 expect(
@@ -269,8 +269,8 @@ expect("resize handles opt out on compact layouts", css.includes(".workspace-spl
 expect(
 	"a character owns a Video capture foldout without a legacy ARDY card",
 	app.includes('hidden={!advancedMode || !isCharacterSelection}') &&
-	app.includes('title={ko("Video capture", "영상 모캡")}') &&
-	!app.includes('title={ko("ARDY motion", "ARDY 모션")}'),
+	app.includes('title={ko("Video capture", "영상 모캡"') &&
+	!app.includes('title={ko("ARDY motion", "ARDY 모션"'),
 );
 expect(
 	"the Studio has no Advanced mode toggle",
@@ -298,7 +298,7 @@ expect(
 	app.includes("requestBridgeExtract(") &&
 	app.includes("createPoseDetector()"),
 );
-expect("every named ingest failure is a message in both locales", app.includes("const MULTIMODEL_REASONS = {") && app.includes('MULTIMODEL_REASONS[code]?.[isKo ? 1 : 0] ?? code'));
+expect("every named ingest failure is a message in both locales", app.includes("const MULTIMODEL_REASONS = {") && app.includes("pick(MULTIMODEL_REASONS[code]) ?? code"));
 // THE INVARIANT: extraction divided root travel by the filmed person's
 // stature, so the clip and the scale must be applied together.
 expect(

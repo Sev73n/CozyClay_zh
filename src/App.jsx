@@ -245,7 +245,7 @@ import {
 } from "./object-path.js";
 import LocaleToggle from "./locale-toggle.jsx";
 import { bucketCount, bucketMs, bucketProjectAge, motionBackendState, track, trackActivation, trackFeature } from "./analytics.js";
-import { ko, isKo } from "./locale.js";
+import { ko, isKo, isZh, pick, LOCALE } from "./locale.js";
 import { PART_COLOURS } from "./part-colours.js";
 import {
 	DEFAULT_POSE,
@@ -502,12 +502,12 @@ function storyboardCaption(prompt) {
 // viewer can check against their own picture, ordered so the sentence always
 // reads limbs before body.
 const RELEASED_BONE_LABELS = [
-	["LeftArm", "left arm", "왼팔"],
-	["RightArm", "right arm", "오른팔"],
-	["LeftLeg", "left leg", "왼다리"],
-	["RightLeg", "right leg", "오른다리"],
-	["Torso", "torso", "몸통"],
-	["Head", "head", "머리"],
+	["LeftArm", "left arm", "왼팔", "左臂"],
+	["RightArm", "right arm", "오른팔", "右臂"],
+	["LeftLeg", "left leg", "왼다리", "左腿"],
+	["RightLeg", "right leg", "오른다리", "右腿"],
+	["Torso", "torso", "몸통", "躯干"],
+	["Head", "head", "머리", "头"],
 ];
 
 function releasedBoneGroup(name) {
@@ -541,14 +541,18 @@ function photoPoseWarning({ releasedBones, confidence }) {
 	}
 	const labels = RELEASED_BONE_LABELS
 		.filter(([key]) => groups.includes(key))
-		.map(([, en, koText]) => (isKo ? koText : en));
+		.map(([, en, koText, zhText]) => ko(en, koText, zhText));
 	const unsure = Number.isFinite(confidence) && confidence < PHOTO_POSE_LOW_CONFIDENCE;
 	if (labels.length === 0) {
 		if (!unsure) return "";
-		return ko(
-			"The photo is unclear, so the pose may be rough — refine it with the handles",
-			"사진이 흐릿해서 자세가 부정확할 수 있어요 — 핸들로 다듬어 보세요"
-		);
+		return ko("The photo is unclear, so the pose may be rough — refine it with the handles", "사진이 흐릿해서 자세가 부정확할 수 있어요 — 핸들로 다듬어 보세요", "照片不够清楚，姿势可能比较糙 — 用手柄再调");
+	}
+	if (isZh) {
+		const list = labels.join("、");
+		const blur = unsure ? "，而且照片不够清楚，其余部分可能比较粗" : "";
+		return labels.length > 1
+			? `照片里看不清${list}，它们保持了默认姿势${blur}`
+			: `照片里看不清${list}，它保持了默认姿势${blur}`;
 	}
 	if (isKo) {
 		const list = labels.join("·");
@@ -1100,7 +1104,7 @@ globalThis.playMode = centerTab === "play";
 		const id = nextCharacterId(characters);
 		setCharacters((list) => [...list, createCharacterEntry({ id, model, x, z, pose: DEFAULT_POSE, subject: "a person" }, list.length)]);
 		setSelectedHierarchyId(`character:${id}`);
-		setToast(ko("Character added to the scene", "인물을 씬에 추가했어요"));
+		setToast(ko("Character added to the scene", "인물을 씬에 추가했어요", "已把人物加进场景"));
 	};
 	function beginAssetDrag(payload, event) {
 		const start = { x: event.clientX, y: event.clientY };
@@ -1227,7 +1231,7 @@ globalThis.playMode = centerTab === "play";
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				rigWaitersRef.current.delete(charId);
-				reject(new Error(ko("The active character's rig is not loaded", "활성 인물의 리그가 로드되지 않았어요")));
+				reject(new Error(ko("The active character's rig is not loaded", "활성 인물의 리그가 로드되지 않았어요", "当前人物的绑定还没载入")));
 			}, timeoutMs);
 			rigWaitersRef.current.set(charId, (rig) => {
 				clearTimeout(timer);
@@ -1424,11 +1428,11 @@ globalThis.playMode = centerTab === "play";
 		if (!object) return;
 		const patch = dropToSurfacePatch(object, sceneObjects.filter((item) => item.id !== object.id));
 		if (patch === null) {
-			setToast(ko("Nothing to drop", "내려놓을 대상이 없어요"));
+			setToast(ko("Nothing to drop", "내려놓을 대상이 없어요", "没有可放下的"));
 			return;
 		}
 		changeSceneObject(object.id, patch);
-		setToast(isKo ? `${sceneObjectNameDisplayKo(object.name)}을 표면 위에 내려놓았어요` : `${object.name} dropped to surface`);
+		setToast(ko(`${object.name} dropped to surface`, `${sceneObjectNameDisplayKo(object.name)}을 표면 위에 내려놓았어요`, `${object.name} 已放到表面上`));
 	}
 
 	/** The hidden file input behind "Import image as cutout". */
@@ -1453,7 +1457,7 @@ globalThis.playMode = centerTab === "play";
 				// A clipboard that carried a file but no supported image (HEIC is
 				// the mainline iPhone case) gets a named rejection, not silence.
 				const carriedFile = Array.from(event.clipboardData?.items ?? []).some((item) => item.kind === "file");
-				if (carriedFile) setToast(ko("That picture format is not supported — use PNG, JPG, WebP or GIF", "지원하지 않는 사진 형식이에요 — PNG, JPG, WebP, GIF만 가능해요"));
+				if (carriedFile) setToast(ko("That picture format is not supported — use PNG, JPG, WebP or GIF", "지원하지 않는 사진 형식이에요 — PNG, JPG, WebP, GIF만 가능해요", "不支持这种图片格式 — 请用 PNG、JPG、WebP 或 GIF"));
 				return;
 			}
 			event.preventDefault();
@@ -1467,6 +1471,7 @@ globalThis.playMode = centerTab === "play";
 	const rejectImageDrop = (count) => setToast(ko(
 		`${count} file${count > 1 ? "s" : ""} not supported — use PNG, JPG, WebP or GIF (iPhone HEIC photos need converting first)`,
 		`지원하지 않는 파일 ${count}개 — PNG, JPG, WebP, GIF만 가능해요 (아이폰 HEIC 사진은 먼저 변환해 주세요)`,
+		`有 ${count} 个文件不支持 — 请用 PNG、JPG、WebP 或 GIF（iPhone 的 HEIC 需先转换）`,
 	));
 	const propsDrop = useImageDrop((files) => importCutouts(files), rejectImageDrop);
 	const inspectorDrop = useImageDrop((files) => importCutouts(files), rejectImageDrop);
@@ -1546,14 +1551,14 @@ globalThis.playMode = centerTab === "play";
 		// swallows the very next W/E/R. Renaming stays on F2/Return and the row's
 		// context menu. (docs/unity-reference.md §9.7)
 		setGizmoMode("move");
-		setToast(isKo ? `${sceneObjectNameDisplayKo(object.name)} 추가됨 — W 이동, E 회전, R 크기` : `${object.name} added — W move, E rotate, R scale`);
+		setToast(ko(`${object.name} added — W move, E rotate, R scale`, `${sceneObjectNameDisplayKo(object.name)} 추가됨 — W 이동, E 회전, R 크기`, `${sceneObjectNameDisplayKo(object.name)} 已添加 — W 移动，E 旋转，R 缩放`));
 	}
 
 	/** "Sofa 2.png" reads as a set piece; "sofa-2.png" does not. The extension
 	 * goes, the rest is the user's own name for the thing. */
 	function cutoutNameFromFile(fileName) {
 		const base = String(fileName ?? "").replace(/\.[^.]+$/, "").trim();
-		return base || ko("Cutout", "컷아웃");
+		return base || ko("Cutout", "컷아웃", "立牌");
 	}
 
 	/**
@@ -1580,12 +1585,10 @@ globalThis.playMode = centerTab === "play";
 			setSelectedHierarchyId(`object:${object.id}`);
 			setGizmoMode("move");
 			setToast(
-				isKo
-					? `${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`
-					: `${object.name} added — type its real height in metres to set the scale`,
+				ko(`${object.name} added — type its real height in metres to set the scale`, `${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`, `${object.name} 已添加 — 输入真实高度（米）即可对齐缩放`),
 			);
 		} catch (error) {
-			setToast(isKo ? `이미지를 가져오지 못했어요 — ${error.message}` : `Could not import that image — ${error.message}`);
+			setToast(ko(`Could not import that image — ${error.message}`, `이미지를 가져오지 못했어요 — ${error.message}`, `无法导入该图片 — ${error.message}`));
 		}
 	}
 
@@ -1605,7 +1608,7 @@ globalThis.playMode = centerTab === "play";
 		markCraftAction("cutout");
 		const record = await assetRecord(assetId);
 		if (!record) {
-			setToast(ko("That image is no longer stored", "그 이미지는 더 이상 저장되어 있지 않아요"));
+			setToast(ko("That image is no longer stored", "그 이미지는 더 이상 저장되어 있지 않아요", "那张图已经不在了"));
 			return;
 		}
 		const object = createCutoutObject(
@@ -1618,9 +1621,7 @@ globalThis.playMode = centerTab === "play";
 		setSelectedHierarchyId(`object:${object.id}`);
 		setGizmoMode("move");
 		setToast(
-			isKo
-				? `${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`
-				: `${object.name} added — type its real height in metres to set the scale`,
+			ko(`${object.name} added — type its real height in metres to set the scale`, `${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`, `${object.name} 已添加 — 输入真实高度（米）即可对齐缩放`),
 		);
 	}
 
@@ -1646,7 +1647,7 @@ globalThis.playMode = centerTab === "play";
 		try {
 			const sourceId = object.sourceAssetId || object.assetId;
 			const source = await assetRecord(sourceId);
-			if (!source) throw new Error(ko("its picture is missing from the store", "저장소에 사진이 없습니다"));
+			if (!source) throw new Error(ko("its picture is missing from the store", "저장소에 사진이 없습니다", "仓库里找不到它的图片"));
 			const [cut, matte] = await Promise.all([
 				cutOutBackground(source, { mask: options.mask, shrink: matteShrink, feather: matteFeather }),
 				maskAsset(options.mask, { width: options.maskWidth, height: options.maskHeight, name: `${source.name || "cutout"} matte` }),
@@ -1665,12 +1666,10 @@ globalThis.playMode = centerTab === "play";
 				height: fullFrameHeight * cut.heightScale,
 			});
 			setToast(
-				isKo
-					? `${object.name} 배경 제거 — ${Math.round(cut.removed * 100)}% 지움. 원본과 칠한 영역은 그대로 남습니다`
-					: `${object.name} — ${Math.round(cut.removed * 100)}% removed. The original and your selection are kept`,
+				ko(`${object.name} — ${Math.round(cut.removed * 100)}% removed. The original and your selection are kept`, `${object.name} 배경 제거 — ${Math.round(cut.removed * 100)}% 지움. 원본과 칠한 영역은 그대로 남습니다`, `${object.name} — 已去掉 ${Math.round(cut.removed * 100)}%。原图和选区都还在`),
 			);
 		} catch (error) {
-			setToast(isKo ? `배경을 제거하지 못했어요 — ${error.message}` : `Could not remove the background — ${error.message}`);
+			setToast(ko(`Could not remove the background — ${error.message}`, `배경을 제거하지 못했어요 — ${error.message}`, `无法去除背景 — ${error.message}`));
 		} finally {
 			setMatteBusy(false);
 		}
@@ -1695,7 +1694,7 @@ globalThis.playMode = centerTab === "play";
 		const placed = { ...object, id: copy.id, name: copy.name, x: object.x + 0.5 };
 		store.applyAtomic((objects) => [...objects, placed]);
 		setSelectedHierarchyId(`object:${placed.id}`);
-		setToast(isKo ? `${sceneObjectNameDisplayKo(placed.name)} 복제됨` : `${placed.name} duplicated`);
+		setToast(ko(`${placed.name} duplicated`, `${sceneObjectNameDisplayKo(placed.name)} 복제됨`, `${sceneObjectNameDisplayKo(placed.name)} 已复制`));
 	}
 
 	/** Frame the selection: fly the shot camera to a comfortable distance along
@@ -1864,14 +1863,14 @@ globalThis.playMode = centerTab === "play";
 			charHistoryRef.current.future.push({ tick: charTop.tick, snapshot: snapshotCast(Boolean(charTop.snapshot.shots)) });
 			charHistoryRef.current.past.pop();
 			restoreCast(charTop.snapshot);
-			setToast(ko("Undone", "실행 취소됨"));
+			setToast(ko("Undone", "실행 취소됨", "已撤销"));
 			return;
 		}
 		suppressObjectClockRef.current = true;
 		const restored = store.undo();
 		suppressObjectClockRef.current = false;
 		if (restored === null) {
-			setToast(ko("Nothing to undo", "실행 취소할 작업이 없어요"));
+			setToast(ko("Nothing to undo", "실행 취소할 작업이 없어요", "没有可撤销的"));
 			return;
 		}
 		lastObjectOpRef.current = ++opClockRef.current;
@@ -1881,14 +1880,14 @@ globalThis.playMode = centerTab === "play";
 		} else if (selectedSceneObjectId && !restored.some((object) => object.id === selectedSceneObjectId)) {
 			setSelectedHierarchyId("props");
 		}
-		setToast(ko("Undone", "실행 취소됨"));
+		setToast(ko("Undone", "실행 취소됨", "已撤销"));
 	}
 
 	function undoObjectDeletion() {
 		if (!objectDeleteUndo) return;
 		if (store.depths().past !== objectDeleteUndo.pastDepth) {
 			setObjectDeleteUndo(null);
-			setToast(ko("A newer edit comes after this deletion. Use Undo history instead.", "삭제 이후의 편집이 있어요. 실행 취소 기록을 사용해 주세요."));
+			setToast(ko("A newer edit comes after this deletion. Use Undo history instead.", "삭제 이후의 편집이 있어요. 실행 취소 기록을 사용해 주세요.", "删除之后还有更新的编辑。请改用撤销记录。"));
 			return;
 		}
 		undoScene();
@@ -1900,21 +1899,21 @@ globalThis.playMode = centerTab === "play";
 			charHistoryRef.current.past.push({ tick: charTop.tick, snapshot: snapshotCast(Boolean(charTop.snapshot.shots)) });
 			charHistoryRef.current.future.pop();
 			restoreCast(charTop.snapshot);
-			setToast(ko("Redone", "다시 실행됨"));
+			setToast(ko("Redone", "다시 실행됨", "已重做"));
 			return;
 		}
 		suppressObjectClockRef.current = true;
 		const restored = store.redo();
 		suppressObjectClockRef.current = false;
 		if (restored === null) {
-			setToast(ko("Nothing to redo", "다시 실행할 작업이 없어요"));
+			setToast(ko("Nothing to redo", "다시 실행할 작업이 없어요", "没有可重做的"));
 			return;
 		}
 		lastObjectOpRef.current = ++opClockRef.current;
 		if (selectedSceneObjectId && !restored.some((object) => object.id === selectedSceneObjectId)) {
 			setSelectedHierarchyId("props");
 		}
-		setToast(ko("Redone", "다시 실행됨"));
+		setToast(ko("Redone", "다시 실행됨", "已重做"));
 	}
 
 	useEffect(() => {
@@ -2293,7 +2292,7 @@ globalThis.playMode = centerTab === "play";
 			const stored = await listAssetIds(db);
 			const record = await getAsset(db, id);
 			if (!record) {
-				setToast(ko("That image is no longer in storage", "이 이미지는 이미 저장소에 없습니다"));
+				setToast(ko("That image is no longer in storage", "이 이미지는 이미 저장소에 없습니다", "这张图已经不在仓库里了"));
 				return false;
 			}
 			// Rebuild this at the destructive boundary rather than trusting the
@@ -2303,19 +2302,19 @@ globalThis.playMode = centerTab === "play";
 			const currentUsageCount = assetUsageCounts(allScenes).get(id) ?? 0;
 			const currentGraphSignature = assetGraphSignature(allScenes);
 			if (expectedUsageCount !== undefined && (!Number.isInteger(expectedUsageCount) || expectedUsageCount !== currentUsageCount)) {
-				setToast(ko("This image's usage changed, so it was not deleted. Please review it again.", "이 이미지의 사용량이 바뀌어서 삭제하지 않았어요. 다시 확인해 주세요."));
+				setToast(ko("This image's usage changed, so it was not deleted. Please review it again.", "이 이미지의 사용량이 바뀌어서 삭제하지 않았어요. 다시 확인해 주세요.", "这张图的用量变了，所以没删。请再看一次。"));
 				return false;
 			}
 			if (expectedGraphSignature !== undefined && expectedGraphSignature !== currentGraphSignature) {
-				setToast(ko("This image's scene references changed, so it was not deleted. Please review it again.", "이 이미지의 씬 참조가 변경되어 삭제하지 않았어요. 다시 확인해 주세요."));
+				setToast(ko("This image's scene references changed, so it was not deleted. Please review it again.", "이 이미지의 씬 참조가 변경되어 삭제하지 않았어요. 다시 확인해 주세요.", "这张图的场景引用变了，所以没删。请再看一次。"));
 				return false;
 			}
 			if (currentUsageCount > 0 && expectedUsageCount === undefined) {
-				setToast(ko("That image is used by a scene and was not deleted", "이 이미지는 씬에서 사용 중이어서 삭제하지 않았어요"));
+				setToast(ko("That image is used by a scene and was not deleted", "이 이미지는 씬에서 사용 중이어서 삭제하지 않았어요", "这张图场景还在用，所以没删"));
 				return false;
 			}
 			if (currentUsageCount === 0 && !unreachableAssetIds(stored, allScenes).includes(id)) {
-				setToast(ko("That image is now used by a scene and was not deleted", "이 이미지는 이제 씬에서 사용 중이어서 삭제하지 않았어요"));
+				setToast(ko("That image is now used by a scene and was not deleted", "이 이미지는 이제 씬에서 사용 중이어서 삭제하지 않았어요", "这张图现在被场景用着，所以没删"));
 				return false;
 			}
 			const authorizedGraph = expectedGraphSignature ?? currentGraphSignature;
@@ -2331,7 +2330,7 @@ globalThis.playMode = centerTab === "play";
 			});
 			if (!committed) {
 				graphConflict = true;
-				setToast(ko("The scene changed while deleting, so the image was kept. Please review storage again.", "삭제하는 동안 씬이 변경되어 이미지를 보존했어요. 저장소를 다시 확인해 주세요."));
+				setToast(ko("The scene changed while deleting, so the image was kept. Please review storage again.", "삭제하는 동안 씬이 변경되어 이미지를 보존했어요. 저장소를 다시 확인해 주세요.", "删除时场景变了，所以图片留着。请再看一眼存储。"));
 				return false;
 			}
 			evictAssetTexture(id);
@@ -2340,7 +2339,7 @@ globalThis.playMode = centerTab === "play";
 			deleted = true;
 			return true;
 		} catch (error) {
-			setToast(isKo ? `이미지를 삭제하지 못했어요 — ${error.message}` : `Could not delete that image — ${error.message}`);
+			setToast(ko(`Could not delete that image — ${error.message}`, `이미지를 삭제하지 못했어요 — ${error.message}`, `无法删除该图片 — ${error.message}`));
 			return false;
 		} finally {
 			db?.close?.();
@@ -2359,9 +2358,9 @@ globalThis.playMode = centerTab === "play";
 			setAssetTrash((current) => current.filter((asset) => asset.id !== record.id));
 			setAssetUndoOffered(false);
 			restored = true;
-			setToast(isKo ? `${record.name || "이미지"} 복원됨` : `${record.name || "Image"} restored`);
+			setToast(ko(`${record.name || "Image"} restored`, `${record.name || "이미지"} 복원됨`, `${record.name || "图片"} 已恢复`));
 		} catch (error) {
-			setToast(isKo ? `이미지를 복원하지 못했어요 — ${error.message}` : `Could not restore that image — ${error.message}`);
+			setToast(ko(`Could not restore that image — ${error.message}`, `이미지를 복원하지 못했어요 — ${error.message}`, `无法恢复该图片 — ${error.message}`));
 		} finally {
 			if (restored) await refreshAssetShelf();
 			setDeletingAssetId(null);
@@ -2456,15 +2455,15 @@ globalThis.playMode = centerTab === "play";
 	function attachTargetLabel(attach) {
 		const index = characters.findIndex((entry) => entry.id === attach.characterId);
 		const who = index < 0
-			? ko("Missing character", "없는 인물")
+			? ko("Missing character", "없는 인물", "缺少人物")
 			: index === 0
-				? ko("Character 1", "인물 1")
+				? ko("Character 1", "인물 1", "人物 1")
 				: index === 1
-					? ko("Character 2", "인물 2")
-					: isKo ? `인물 ${index + 1}` : `Character ${index + 1}`;
+					? ko("Character 2", "인물 2", "人物 2")
+					: ko(`Character ${index + 1}`, `인물 ${index + 1}`, `人物 ${index + 1}`);
 		const bone = attach.bone
 			? HIERARCHY_INSPECTOR_TITLES[`rig.${attach.bone}`] ?? attach.bone
-			: ko("Root", "루트");
+			: ko("Root", "루트", "根");
 		return `${who} · ${bone}`;
 	}
 
@@ -2688,14 +2687,14 @@ globalThis.playMode = centerTab === "play";
 		setRailDraw(next);
 		if (next) {
 			setWorkspaceLayout((current) => ({ ...current, insetCollapsed: false }));
-			setToast(ko("Draw the selected Shot's rail in the Top-View", "탑뷰에서 선택한 샷의 레일을 그리세요"));
+			setToast(ko("Draw the selected Shot's rail in the Top-View", "탑뷰에서 선택한 샷의 레일을 그리세요", "在顶视图里画选中镜头的轨道"));
 		}
 	}
 	function deleteCameraRail() {
 		if (!cameraRail) return;
 		setRailDraw(false);
 		changeActiveCamera(removeCameraRail(activeCamera));
-		setToast(ko("Camera rail deleted — Follow keeps the current distance", "카메라 레일 삭제됨 — 팔로우가 현재 거리를 유지합니다"));
+		setToast(ko("Camera rail deleted — Follow keeps the current distance", "카메라 레일 삭제됨 — 팔로우가 현재 거리를 유지합니다", "已删除相机轨道 — 跟随会保持当前距离"));
 	}
 	function previewCameraShot(shotId) {
 		const selected = shots.find((entry) => entry.id === shotId);
@@ -3069,9 +3068,7 @@ globalThis.playMode = centerTab === "play";
 			// learn on the machine they open it on. Say it here, at save time.
 			const missing = ids.filter((id, index) => !assets[index]);
 			if (missing.length) {
-				setToast(isKo
-					? `참조된 사진 ${missing.length}개를 찾지 못해보내기에서 빠졌어요`
-					: `${missing.length} referenced image${missing.length > 1 ? "s" : ""} missing — left out of the export`);
+				setToast(ko(`${missing.length} referenced image${missing.length > 1 ? "s" : ""} missing — left out of the export`, `참조된 사진 ${missing.length}개를 찾지 못해보내기에서 빠졌어요`, `${missing.length} 张引用图片找不到 — 已从导出中排除`));
 			}
 			return JSON.stringify(createProjectDocument({ ...input, assets, savedAt: Date.now() }), null, 2);
 		} finally {
@@ -3141,14 +3138,14 @@ globalThis.playMode = centerTab === "play";
 				object_count_bucket: bucketCount(projectStateRef.current.sceneObjects?.length ?? 0),
 				shot_count_bucket: bucketCount(shots.length),
 			});
-			setToast(isKo ? `프로젝트 저장됨: ${name}${PROJECT_EXTENSION}` : `Project saved: ${name}${PROJECT_EXTENSION}`);
+			setToast(ko(`Project saved: ${name}${PROJECT_EXTENSION}`, `프로젝트 저장됨: ${name}${PROJECT_EXTENSION}`, `项目已保存：${name}${PROJECT_EXTENSION}`));
 		} catch (err) {
 			if (err?.name === "AbortError") {
 				setProjectSaveState(projectDirty ? "dirty" : "saved");
 				return; // user closed the picker
 			}
 			setProjectSaveState("error");
-			setToast(ko("Could not save the project", "프로젝트를 저장하지 못했어요"));
+			setToast(ko("Could not save the project", "프로젝트를 저장하지 못했어요", "没能保存项目"));
 		}
 	}
 
@@ -3190,7 +3187,7 @@ globalThis.playMode = centerTab === "play";
 			if (!file) return;
 			const result = readProjectDocument(file.text);
 			if (!result.ok) {
-				setToast(isKo ? `프로젝트를 열 수 없어요: ${result.reason}` : `Cannot open project: ${result.reason}`);
+				setToast(ko(`Cannot open project: ${result.reason}`, `프로젝트를 열 수 없어요: ${result.reason}`, `无法打开项目：${result.reason}`));
 				return;
 			}
 			result.project.savedAt = result.project.savedAt ?? file.savedAt ?? null;
@@ -3199,11 +3196,11 @@ globalThis.playMode = centerTab === "play";
 			await rehydrateProjectAssets(result.project, result.warnings);
 			applyProject(result.project);
 			setProjectStartupOpen(false);
-			setToast(isKo ? `프로젝트 열림: ${result.project.name}` : `Project opened: ${result.project.name}`);
+			setToast(ko(`Project opened: ${result.project.name}`, `프로젝트 열림: ${result.project.name}`, `已打开项目：${result.project.name}`));
 		} catch (err) {
 			if (err?.name === "AbortError") return;
 			console.error("openProject failed", err);
-			setToast(ko("Could not open the project", "프로젝트를 열지 못했어요"));
+			setToast(ko("Could not open the project", "프로젝트를 열지 못했어요", "没能打开项目"));
 		}
 	}
 
@@ -3214,13 +3211,13 @@ globalThis.playMode = centerTab === "play";
 			// A stored handle may have been demoted to "prompt" since the last
 			// session (#51); this click is the user gesture that can re-grant it.
 			if ((await requestHandlePermission(handle)) !== "granted") {
-				setToast(ko("Project access was not granted — allow access and try again.", "프로젝트 접근이 허용되지 않았어요. 접근을 허용하고 다시 시도해 주세요."));
+				setToast(ko("Project access was not granted — allow access and try again.", "프로젝트 접근이 허용되지 않았어요. 접근을 허용하고 다시 시도해 주세요.", "没有授予项目权限 — 请允许后再试。"));
 				return;
 			}
 			const file = await readProjectFile(handle);
 			const result = readProjectDocument(file.text);
 			if (!result.ok) {
-				setToast(isKo ? `프로젝트를 열 수 없어요: ${result.reason}` : `Cannot open project: ${result.reason}`);
+				setToast(ko(`Cannot open project: ${result.reason}`, `프로젝트를 열 수 없어요: ${result.reason}`, `无法打开项目：${result.reason}`));
 				return;
 			}
 			result.project.savedAt = result.project.savedAt ?? file.savedAt ?? null;
@@ -3230,22 +3227,22 @@ globalThis.playMode = centerTab === "play";
 			applyProject(result.project);
 		setProjectBrowserOpen(false);
 		setProjectStartupOpen(false);
-		setToast(isKo ? `프로젝트 열림: ${result.project.name}` : `Project opened: ${result.project.name}`);
+		setToast(ko(`Project opened: ${result.project.name}`, `프로젝트 열림: ${result.project.name}`, `已打开项目：${result.project.name}`));
 		} catch (err) {
 			console.error("openProjectByHandle failed", err);
-			setToast(ko("Could not open the project", "프로젝트를 열지 못했어요"));
+			setToast(ko("Could not open the project", "프로젝트를 열지 못했어요", "没能打开项目"));
 		}
 	}
 
 	function requestNewProject() {
-		if (projectDirty && !window.confirm(ko("Discard unsaved changes and start a new project?", "저장되지 않은 변경사항을 버리고 새 프로젝트를 시작할까요?"))) return;
+		if (projectDirty && !window.confirm(ko("Discard unsaved changes and start a new project?", "저장되지 않은 변경사항을 버리고 새 프로젝트를 시작할까요?", "丢弃未保存的更改并开始新项目？"))) return;
 		setProjectNameDialog({ kind: "new", initialName: projectName ?? "My Project" });
 	}
 
 	function newProject(name) {
 		if (typeof name !== "string") return requestNewProject();
 		setProjectNameDialog(null);
-		const fresh = createSceneDocument(ko("SCENE 01", "씬 01"));
+		const fresh = createSceneDocument(ko("SCENE 01", "씬 01", "场景 01"));
 		storeWorkflowGraph(createWorkflowGraph());
 		setScenes(fresh.scenes);
 		setActiveSceneId(fresh.activeSceneId);
@@ -3265,7 +3262,7 @@ globalThis.playMode = centerTab === "play";
 		storeProjectSession(name);
 		setProjectStartupOpen(false);
 		setFirstSuccessGuideOpen(true);
-		setToast(ko(`New project: ${name}`, `새 프로젝트: ${name}`));
+		setToast(ko(`New project: ${name}`, `새 프로젝트: ${name}`, `新项目：${name}`));
 	}
 
 	// Re-open the last project on launch when the browser still grants access.
@@ -3282,7 +3279,7 @@ globalThis.playMode = centerTab === "play";
 			projectHandleRef.current = record.handle;
 			await rehydrateProjectAssets(result.project, result.warnings);
 			applyProject(result.project);
-			setToast(isKo ? `프로젝트 복원됨: ${result.project.name}` : `Project restored: ${result.project.name}`);
+			setToast(ko(`Project restored: ${result.project.name}`, `프로젝트 복원됨: ${result.project.name}`, `已恢复项目：${result.project.name}`));
 		} catch {
 			/* missing or unreadable file: fall back to the session cache */
 		}
@@ -4454,8 +4451,8 @@ globalThis.playMode = centerTab === "play";
 	}
 
 	async function runShotExport({ startFrame = 0, endFrame, download = true } = {}) {
-		if (recRef.current) throw new Error(ko("An export is already running", "이미 내보내기 중입니다"));
-		if (!captureRef.current || !shotCamRef.current) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요"));
+		if (recRef.current) throw new Error(ko("An export is already running", "이미 내보내기 중입니다", "已经在导出了"));
+		if (!captureRef.current || !shotCamRef.current) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요", "镜头渲染器还没准备好"));
 		const resolvedEndFrame = endFrame ?? Math.max(0, currentRecordFrameCount() - 1);
 		const controller = new AbortController();
 		const rec = { controller };
@@ -4491,7 +4488,7 @@ globalThis.playMode = centerTab === "play";
 				anchor.click();
 				setTimeout(() => URL.revokeObjectURL(url), 10_000);
 				setRecordedVideoName(name);
-				setToast(isKo ? `${name} 저장됨 · ${result.frameCount}프레임` : `Saved ${name} · ${result.frameCount} frames`);
+				setToast(ko(`Saved ${name} · ${result.frameCount} frames`, `${name} 저장됨 · ${result.frameCount}프레임`, `已保存 ${name} · ${result.frameCount} 帧`));
 			}
 			return result;
 		} finally {
@@ -4527,7 +4524,7 @@ globalThis.playMode = centerTab === "play";
 
 	function downloadOtioCutList() {
 		if (!shots.length) {
-			setToast(ko("Add at least one Shot before exporting OTIO", "OTIO를 내보내려면 샷을 하나 이상 추가하세요"));
+			setToast(ko("Add at least one Shot before exporting OTIO", "OTIO를 내보내려면 샷을 하나 이상 추가하세요", "导出 OTIO 前请至少加一条镜头"));
 			return;
 		}
 		try {
@@ -4555,9 +4552,7 @@ globalThis.playMode = centerTab === "play";
 			anchor.click();
 			setTimeout(() => URL.revokeObjectURL(url), 10_000);
 			const frameCount = shots.reduce((total, shot) => total + shot.endFrame - shot.startFrame + 1, 0);
-			setToast(isKo
-				? `OTIO 저장됨 · ${shots.length}샷 · ${frameCount}프레임`
-				: `OTIO saved · ${shots.length} shots · ${frameCount} frames`);
+			setToast(ko(`OTIO saved · ${shots.length} shots · ${frameCount} frames`, `OTIO 저장됨 · ${shots.length}샷 · ${frameCount}프레임`, `OTIO 已保存 · ${shots.length} 个镜头 · ${frameCount} 帧`));
 		} catch (error) {
 			setToast(error?.message || String(error));
 		}
@@ -4602,7 +4597,7 @@ globalThis.playMode = centerTab === "play";
 	// frame, exactly as the MP4 pass does. Bones and camera are put back
 	// afterwards, so a pack built mid-session leaves the viewport untouched.
 	function captureShotFramePng(frame) {
-		if (!captureRef.current || !shotCamRef.current) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요"));
+		if (!captureRef.current || !shotCamRef.current) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요", "镜头渲染器还没准备好"));
 		const cam = shotCamRef.current;
 		const cameraSnapshot = {
 			position: cam.position.clone(),
@@ -4657,11 +4652,11 @@ globalThis.playMode = centerTab === "play";
 	// names, so the download path, the embed message and QA all share it.
 	async function buildShotKeyframePack(entry, index, onProgress = null) {
 		const packShot = { title: entry.name, index: index + 1, startFrame: entry.startFrame, endFrame: entry.endFrame };
-		onProgress?.(ko(`Rendering frames for "${entry.name}"`, `"${entry.name}" 프레임 렌더링 중`));
+		onProgress?.(ko(`Rendering frames for "${entry.name}"`, `"${entry.name}" 프레임 렌더링 중`, `正在渲染 “${entry.name}” 的帧`));
 		const firstUrl = captureShotFramePng(entry.startFrame);
-		if (!firstUrl) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요"));
+		if (!firstUrl) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요", "镜头渲染器还没准备好"));
 		const lastUrl = entry.endFrame > entry.startFrame ? captureShotFramePng(entry.endFrame) : null;
-		onProgress?.(ko(`Recording the clip for "${entry.name}"`, `"${entry.name}" 클립 녹화 중`));
+		onProgress?.(ko(`Recording the clip for "${entry.name}"`, `"${entry.name}" 클립 녹화 중`, `正在录制 “${entry.name}” 片段`));
 		const recorded = await runShotExport({ startFrame: entry.startFrame, endFrame: entry.endFrame, download: false });
 		const clipBytes = new Uint8Array(await recorded.blob.arrayBuffer());
 		const meta = packMetaForShot(entry, index);
@@ -4691,7 +4686,7 @@ globalThis.playMode = centerTab === "play";
 			if (index < 0) throw new Error(`Unknown shots ID: ${shotId}`);
 			return index;
 		}
-		if (!shots.length) throw new Error(ko("Add at least one Shot before exporting a keyframe pack", "키프레임 팩을 내보내려면 샷을 하나 이상 추가하세요"));
+		if (!shots.length) throw new Error(ko("Add at least one Shot before exporting a keyframe pack", "키프레임 팩을 내보내려면 샷을 하나 이상 추가하세요", "导出关键帧包前请至少加一条镜头"));
 		const atPlayhead = shotIndexAtFrame(shots, tlFrame);
 		return atPlayhead >= 0 ? atPlayhead : 0;
 	}
@@ -4708,9 +4703,7 @@ globalThis.playMode = centerTab === "play";
 				const url = URL.createObjectURL(new Blob([pack.bytes], { type: "application/zip" }));
 				saveDownload(url, pack.name);
 				setTimeout(() => URL.revokeObjectURL(url), 10_000);
-				setToast(isKo
-					? `${pack.name} 저장됨 · 파일 ${pack.entries.length}개${label}`
-					: `Saved ${pack.name} · ${pack.entries.length} files${label}`);
+				setToast(ko(`Saved ${pack.name} · ${pack.entries.length} files${label}`, `${pack.name} 저장됨 · 파일 ${pack.entries.length}개${label}`, `已保存 ${pack.name} · ${pack.entries.length} 个文件${label}`));
 			}
 			trackFeature("export_keyframe_pack");
 		} catch (error) {
@@ -4723,7 +4716,7 @@ globalThis.playMode = centerTab === "play";
 		try {
 			const dataUrls = renderPassDataUrls();
 			for (const kind of ["depth", "normal"]) saveDownload(dataUrls[kind], passFileName(kind));
-			setToast(ko("Depth and normal passes downloaded", "뎁스·노멀 패스를 다운로드했어요"));
+			setToast(ko("Depth and normal passes downloaded", "뎁스·노멀 패스를 다운로드했어요", "已下载深度和法线通道"));
 			trackFeature("export_render_pass");
 		} catch (error) {
 			setToast(error?.message || String(error));
@@ -4736,11 +4729,11 @@ globalThis.playMode = centerTab === "play";
 	function renderPassDataUrls(kinds = ["depth", "normal"]) {
 		const capture = captureRef.current;
 		const cam = shotCamRef.current;
-		if (!capture || !cam) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요"));
+		if (!capture || !cam) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요", "镜头渲染器还没准备好"));
 		const output = {};
 		for (const kind of kinds) {
 			const dataUrl = renderPass(capture, capture.scene, cam, kind, bufferToPng);
-			if (!dataUrl) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요"));
+			if (!dataUrl) throw new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요", "镜头渲染器还没准备好"));
 			output[kind] = dataUrl;
 		}
 		return output;
@@ -4749,8 +4742,8 @@ globalThis.playMode = centerTab === "play";
 	/** Contact sheet of the whole cut: one thumbnail and prompt per shot. */
 	async function exportStoryboard() {
 		try {
-			if (!shots.length) throw new Error(ko("Add at least one Shot before exporting a storyboard", "스토리보드를 내보내려면 샷을 하나 이상 추가하세요"));
-			setToast(ko("Composing the storyboard…", "스토리보드 구성 중…"));
+			if (!shots.length) throw new Error(ko("Add at least one Shot before exporting a storyboard", "스토리보드를 내보내려면 샷을 하나 이상 추가하세요", "导出分镜前请至少加一条镜头"));
+			setToast(ko("Composing the storyboard…", "스토리보드 구성 중…", "正在拼分镜…"));
 			const cells = [];
 			for (const [index, entry] of shots.entries()) {
 				const dataUrl = captureShotFramePng(entry.startFrame);
@@ -4787,7 +4780,7 @@ globalThis.playMode = centerTab === "play";
 				},
 			});
 			saveDownload(canvas.toDataURL("image/png"), "cozyclay-storyboard.png");
-			setToast(isKo ? `스토리보드 저장됨 · ${cells.length}샷` : `Storyboard saved · ${cells.length} shots`);
+			setToast(ko(`Storyboard saved · ${cells.length} shots`, `스토리보드 저장됨 · ${cells.length}샷`, `分镜已保存 · ${cells.length} 个镜头`));
 			trackFeature("export_storyboard");
 		} catch (error) {
 			setToast(error?.message || String(error));
@@ -5003,7 +4996,7 @@ globalThis.playMode = centerTab === "play";
 			setTlFrame(target);
 			setWaypointMode(true);
 			selectActiveCharacterInHierarchy();
-			setToast(isKo ? `프레임 ${target}의 루트 웨이포인트를 선택했어요. 탑뷰에서 점을 드래그해 위치를 조정하세요.` : `Root waypoint at frame ${target} selected — drag the pin in the Top-View to reposition.`);
+			setToast(ko(`Root waypoint at frame ${target} selected — drag the pin in the Top-View to reposition.`, `프레임 ${target}의 루트 웨이포인트를 선택했어요. 탑뷰에서 점을 드래그해 위치를 조정하세요.`, `已选中第 ${target} 帧的根路径点 — 在俯视图拖动图钉调整位置。`));
 			return;
 		}
 		setPendingWaypointFrame(target);
@@ -5011,7 +5004,7 @@ globalThis.playMode = centerTab === "play";
 		setTlFrame(target);
 		setWaypointMode(true);
 		selectActiveCharacterInHierarchy();
-		setToast(isKo ? `프레임 ${target}이 예약됐어요. 샷 뷰 바닥을 클릭하면 그 위치에 루트 웨이포인트가 생성됩니다.` : `Frame ${target} is reserved — click the Shot-view floor to drop the root waypoint there.`);
+		setToast(ko(`Frame ${target} is reserved — click the Shot-view floor to drop the root waypoint there.`, `프레임 ${target}이 예약됐어요. 샷 뷰 바닥을 클릭하면 그 위치에 루트 웨이포인트가 생성됩니다.`, `第 ${target} 帧已预留 — 点击镜头视图地面即可放下根路径点。`));
 	}
 	/** ARDY-demo style authoring: each empty-floor press in the Shot view drops
 	    the next waypoint where it was clicked; the frame gap comes from walking
@@ -5022,12 +5015,12 @@ globalThis.playMode = centerTab === "play";
 		const ordered = [...waypoints].sort((a, b) => a.frame - b.frame);
 		const last = ordered[ordered.length - 1] ?? rootStart();
 		if (waypoints.length + 1 > MAX_WAYPOINTS) {
-			setToast(isKo ? `루트 경로는 웨이포인트 ${MAX_WAYPOINTS}개까지 사용할 수 있어요` : `The root path is capped at ${MAX_WAYPOINTS} waypoints`);
+			setToast(ko(`The root path is capped at ${MAX_WAYPOINTS} waypoints`, `루트 경로는 웨이포인트 ${MAX_WAYPOINTS}개까지 사용할 수 있어요`, `根路径最多 ${MAX_WAYPOINTS} 个路径点`));
 			return;
 		}
 		const pendingFrame = pendingWaypointFrame == null ? null : Math.max(1, Math.min(Math.round(pendingWaypointFrame), tlFrameCount - 1));
 		if (pendingFrame != null && ordered.some((waypoint) => waypoint.frame === pendingFrame)) {
-			setToast(isKo ? `프레임 ${pendingFrame}에는 이미 루트 웨이포인트가 있어요. 타임라인에서 빈 프레임을 선택하세요.` : `Frame ${pendingFrame} already has a root waypoint — pick an empty frame on the timeline.`);
+			setToast(ko(`Frame ${pendingFrame} already has a root waypoint — pick an empty frame on the timeline.`, `프레임 ${pendingFrame}에는 이미 루트 웨이포인트가 있어요. 타임라인에서 빈 프레임을 선택하세요.`, `第 ${pendingFrame} 帧已有根路径点 — 请在时间线上选一个空帧。`));
 			setPendingWaypointFrame(null);
 			return;
 		}
@@ -5039,7 +5032,7 @@ globalThis.playMode = centerTab === "play";
 		const walkGap = Math.max(8, Math.round((Math.hypot(x - last.x, z - last.z) / WALK_SPEED_MPS) * tlFps));
 		const frame = pendingFrame ?? (pinned ? Math.min(playhead, tlFrameCount - 1) : last.frame + walkGap);
 		if (frame > tlFrameCount - 1) {
-			setToast(ko("The path already fills the clip — extend the duration or clear a waypoint", "경로가 이미 클립 길이를 채웠어요. 시간을 늘리거나 웨이포인트를 지워 주세요"));
+			setToast(ko("The path already fills the clip — extend the duration or clear a waypoint", "경로가 이미 클립 길이를 채웠어요. 시간을 늘리거나 웨이포인트를 지워 주세요", "路径已经铺满片段了。请加长时间，或清掉一个路径点"));
 			return;
 		}
 		// The generator cannot refuse an impossible pin, so the click is the
@@ -5050,7 +5043,7 @@ globalThis.playMode = centerTab === "play";
 		const nextWaypoints = [...ordered.slice(0, index), waypoint, ...ordered.slice(index)];
 		const verdict = validateWaypointAt(nextWaypoints, index, waypoint);
 		if (!verdict.ok) {
-			setToast(isKo ? `배치하지 못했어요 — ${verdict.error}` : `Not placed — ${verdict.error}`);
+			setToast(ko(`Not placed — ${verdict.error}`, `배치하지 못했어요 — ${verdict.error}`, `无法放置 — ${verdict.error}`));
 			return;
 		}
 		// Past every refusal: the waypoint is going down, so the pre-drop path is
@@ -5060,9 +5053,16 @@ globalThis.playMode = centerTab === "play";
 		setTlFrame(frame);
 		setActiveWaypointId(waypoint.id);
 		setPendingWaypointFrame(null);
-		const placed = isKo
-			? `루트 웨이포인트 ${index + 1} 추가: 프레임 ${frame}${pendingFrame != null ? " (타임라인 예약 프레임)" : pinned ? " (재생 헤드 위치)" : ` (~${(frame / tlFps).toFixed(1)}초 걷기 기준)`}`
-			: `Waypoint ${ordered.length + 1} — frame ${frame} ${pendingFrame != null ? "(at the reserved frame)" : pinned ? "(at the playhead)" : `(~${(frame / tlFps).toFixed(1)}s at a walk)`}`;
+		const extra = pendingFrame != null
+			? ko("(at the reserved frame)", "(타임라인 예약 프레임)", "（时间线预留帧）")
+			: pinned
+				? ko("(at the playhead)", "(재생 헤드 위치)", "（播放头位置）")
+				: ko(`(~${(frame / tlFps).toFixed(1)}s at a walk)`, `(~${(frame / tlFps).toFixed(1)}초 걷기 기준)`, `（按步行约 ${(frame / tlFps).toFixed(1)} 秒）`);
+		const placed = ko(
+			`Waypoint ${ordered.length + 1} — frame ${frame} ${extra}`,
+			`루트 웨이포인트 ${index + 1} 추가: 프레임 ${frame} ${extra}`,
+			`已添加根路径点 ${index + 1}：第 ${frame} 帧 ${extra}`,
+		);
 		setToast(verdict.warnings.length ? `${placed} · ⚠ ${verdict.warnings[0]}` : placed);
 	}
 
@@ -5078,13 +5078,13 @@ globalThis.playMode = centerTab === "play";
 		const nextOrdered = ordered.map((waypoint) => waypoint.id === id ? nextWaypoint : waypoint);
 		const verdict = validateWaypointAt(nextOrdered, index, nextWaypoint);
 		if (!verdict.ok) {
-			setToast(isKo ? `이 위치는 루트 경로에 맞지 않아요: ${verdict.error}` : `This position doesn't fit the root path: ${verdict.error}`);
+			setToast(ko(`This position doesn't fit the root path: ${verdict.error}`, `이 위치는 루트 경로에 맞지 않아요: ${verdict.error}`, `这个位置不适合根路径：${verdict.error}`));
 			return;
 		}
 		setWaypoints(nextOrdered);
 		setActiveWaypointId(id);
 		setPendingWaypointFrame((current) => (current === nextWaypoint.frame ? null : current));
-		if (verdict.warnings.length) setToast(isKo ? `루트 웨이포인트 이동됨: ${verdict.warnings[0]}` : `Root waypoint moved: ${verdict.warnings[0]}`);
+		if (verdict.warnings.length) setToast(ko(`Root waypoint moved: ${verdict.warnings[0]}`, `루트 웨이포인트 이동됨: ${verdict.warnings[0]}`, `根路径点已移动：${verdict.warnings[0]}`));
 	}
 
 	function removeWaypoint(id) {
@@ -5104,11 +5104,11 @@ globalThis.playMode = centerTab === "play";
 		setWaypointMode(next);
 		if (!next) {
 			setPendingWaypointFrame(null);
-			setToast(ko("2D Root path constraints off", "2D 루트 경로 제약 꺼짐"));
+			setToast(ko("2D Root path constraints off", "2D 루트 경로 제약 꺼짐", "2D 根路径约束已关"));
 			return;
 		}
 
-		setToast(ko("2D Root path on — click the set floor in the Shot view to drop waypoints; Subject 1 is the frame 0 start", "2D 루트 경로 켜짐 — 샷 뷰의 세트 바닥을 클릭해 웨이포인트를 놓으세요. 인물 1이 0프레임 시작점입니다"));
+		setToast(ko("2D Root path on — click the set floor in the Shot view to drop waypoints; Subject 1 is the frame 0 start", "2D 루트 경로 켜짐 — 샷 뷰의 세트 바닥을 클릭해 웨이포인트를 놓으세요. 인물 1이 0프레임 시작점입니다", "2D 根路径已开 — 在镜头视图的场地地面上点击放置路径点；人物 1 是第 0 帧起点"));
 	}
 
 	function advanceFrame(steps = 1) {
@@ -5170,7 +5170,7 @@ globalThis.playMode = centerTab === "play";
 			setMultiModelUrl(text.trim());
 			setMultiModelStatus("idle");
 		} catch {
-			setToast(isKo ? "클립보드를 읽지 못했어요 — 직접 붙여넣어 주세요" : "Clipboard is unavailable — paste into the field directly");
+			setToast(ko("Clipboard is unavailable — paste into the field directly", "클립보드를 읽지 못했어요 — 직접 붙여넣어 주세요", "无法读取剪贴板 — 请直接粘贴到输入框"));
 		}
 	}
 
@@ -5187,7 +5187,7 @@ globalThis.playMode = centerTab === "play";
 		if (!normalized.ok) {
 			setMultiModelStatus("error");
 			setMultiModelStage("error");
-			setMultiModelError(MULTIMODEL_REASONS[normalized.reason]?.[isKo ? 1 : 0] ?? normalized.reason);
+			setMultiModelError(pick(MULTIMODEL_REASONS[normalized.reason]) ?? normalized.reason);
 			return;
 		}
 		ingestFootage({ kind: "url", name: sourceLabel(normalized.url), url: normalized.url });
@@ -5223,7 +5223,7 @@ globalThis.playMode = centerTab === "play";
 			setMultiModelStage("error");
 			setMultiModelStatus("error");
 			setMultiModelProgress(null);
-			setMultiModelError(MULTIMODEL_REASONS[code]?.[isKo ? 1 : 0] ?? code);
+			setMultiModelError(pick(MULTIMODEL_REASONS[code]) ?? code);
 		}
 	}
 
@@ -5281,16 +5281,14 @@ globalThis.playMode = centerTab === "play";
 			setTlFrameCount(footage.frames);
 			setTlFrame(0);
 			setTlPlaying(false);
-			setToast(isKo
-				? `${source.name} 인제스트됨 — ${footage.frames}프레임 @ ${footage.fps} fps`
-				: `Ingested ${source.name} — ${footage.frames} frames @ ${footage.fps} fps`);
+			setToast(ko(`Ingested ${source.name} — ${footage.frames} frames @ ${footage.fps} fps`, `${source.name} 인제스트됨 — ${footage.frames}프레임 @ ${footage.fps} fps`, `已导入 ${source.name} — ${footage.frames} 帧 @ ${footage.fps} fps`));
 		} catch (error) {
 			if (!live()) return;
 			const code = error?.message ?? String(error);
 			setMultiModelStage("error");
 			setMultiModelStatus("error");
 			setMultiModelProgress(null);
-			setMultiModelError(MULTIMODEL_REASONS[code]?.[isKo ? 1 : 0] ?? code);
+			setMultiModelError(pick(MULTIMODEL_REASONS[code]) ?? code);
 		}
 	}
 
@@ -5368,14 +5366,16 @@ globalThis.playMode = centerTab === "play";
 			const persons = 1 + placed;
 			setMultiModelTake({ frames: done.frames, fps: done.fps, gpu: true, personScale, persons, trajectory: done.performance?.trajectory });
 			setMultiModelExtract("done");
-			setToast(isKo
-				? `GPU 모션 추출됨 — ${done.frames}프레임 @ ${done.fps} fps${persons > 1 ? ` · ${persons}명` : ""} · 인물 스케일 ×${personScale.toFixed(2)}`
-				: `GPU motion extracted — ${done.frames} frames @ ${done.fps} fps${persons > 1 ? ` · ${persons} performers` : ""} · person scale ×${personScale.toFixed(2)}`);
+			setToast(ko(
+				`GPU motion extracted — ${done.frames} frames @ ${done.fps} fps${persons > 1 ? ` · ${persons} performers` : ""} · person scale ×${personScale.toFixed(2)}`,
+				`GPU 모션 추출됨 — ${done.frames}프레임 @ ${done.fps} fps${persons > 1 ? ` · ${persons}명` : ""} · 인물 스케일 ×${personScale.toFixed(2)}`,
+				`GPU 动作已提取 — ${done.frames} 帧 @ ${done.fps} fps${persons > 1 ? ` · ${persons} 人` : ""} · 人物缩放 ×${personScale.toFixed(2)}`,
+			));
 		} catch (error) {
 			if (!live()) return;
 			const code = error?.message ?? String(error);
 			setMultiModelExtract("error");
-			setMultiModelExtractError(MULTIMODEL_REASONS[code]?.[isKo ? 1 : 0] ?? code);
+			setMultiModelExtractError(pick(MULTIMODEL_REASONS[code]) ?? code);
 		}
 	}
 
@@ -5538,14 +5538,12 @@ globalThis.playMode = centerTab === "play";
 			setTlPlaying(false);
 			setMultiModelTake({ frames: take.frames, fitted: take.fitted, held: take.held, sampled: total, accepted: samples.length });
 			setMultiModelExtract("done");
-			setToast(isKo
-				? `모션 추출됨 — ${take.frames}프레임 테이크 @ ${take.fps} fps (실측 ${take.fitted}, 유지 ${take.held})`
-				: `Motion extracted — a ${take.frames}-frame take @ ${take.fps} fps (${take.fitted} measured, ${take.held} held)`);
+			setToast(ko(`Motion extracted — a ${take.frames}-frame take @ ${take.fps} fps (${take.fitted} measured, ${take.held} held)`, `모션 추출됨 — ${take.frames}프레임 테이크 @ ${take.fps} fps (실측 ${take.fitted}, 유지 ${take.held})`, `动作已提取 — ${take.frames} 帧镜头 @ ${take.fps} fps（实测 ${take.fitted}，保持 ${take.held}）`));
 		} catch (error) {
 			if (!live()) return;
 			const code = error?.message ?? String(error);
 			setMultiModelExtract("error");
-			setMultiModelExtractError(MULTIMODEL_REASONS[code]?.[isKo ? 1 : 0] ?? code);
+			setMultiModelExtractError(pick(MULTIMODEL_REASONS[code]) ?? code);
 		}
 	}
 
@@ -5673,9 +5671,7 @@ globalThis.playMode = centerTab === "play";
 			if (bufferOwnsTarget && !preview) setCommittedIkEdits([]);
 			if (!preview) {
 				setToast(
-					isKo
-						? `모션 로드됨: ${decoded.frames}프레임 @ ${decoded.fps} fps${hadIkKeys ? " — 이전 테이크의 IK 키는 초기화됐어요" : ""}`
-						: `Motion loaded: ${decoded.frames} frames @ ${decoded.fps} fps${hadIkKeys ? " — IK keys from the previous take were cleared" : ""}`,
+					ko(`Motion loaded: ${decoded.frames} frames @ ${decoded.fps} fps${hadIkKeys ? " — IK keys from the previous take were cleared" : ""}`, `모션 로드됨: ${decoded.frames}프레임 @ ${decoded.fps} fps${hadIkKeys ? " — 이전 테이크의 IK 키는 초기화됐어요" : ""}`, `动作已加载：${decoded.frames} 帧 @ ${decoded.fps} fps${hadIkKeys ? " — 上一条镜头的 IK 关键帧已清除" : ""}`),
 				);
 			}
 			// The applied stature, so a caller does not have to re-derive it
@@ -5788,9 +5784,7 @@ globalThis.playMode = centerTab === "play";
 		setTlFrameCount(sliced.frames);
 		setTlFrame((frame) => Math.min(frame, sliced.frames - 1));
 		setTlPlaying(false);
-		setToast(isKo
-			? `테이크 잘라냄 — ${sliced.frames}프레임`
-			: `Take cut to ${sliced.frames} frames`);
+		setToast(ko(`Take cut to ${sliced.frames} frames`, `테이크 잘라냄 — ${sliced.frames}프레임`, `镜头已裁到 ${sliced.frames} 帧`));
 	}
 
 	function resetMotionTrim() {
@@ -5802,7 +5796,7 @@ globalThis.playMode = centerTab === "play";
 		setMotion({ ...full, editSegments: createMotionEdit(full.frames) });
 		setTlFrameCount(full.frames);
 		setTlFrame((frame) => Math.min(frame, full.frames - 1));
-		setToast(ko("Full take restored", "테이크 전체 길이 복원"));
+		setToast(ko("Full take restored", "테이크 전체 길이 복원", "已恢复整条"));
 	}
 
 	function editMotionSegments(edit) {
@@ -5849,14 +5843,14 @@ globalThis.playMode = centerTab === "play";
 		const next = splitMotionEdit(current, tlFrame);
 		if (next === current) return;
 		editMotionSegments(next);
-		setToast(ko("Full-Body clip cut at the playhead", "전신 클립을 재생 헤드에서 컷했어요"));
+		setToast(ko("Full-Body clip cut at the playhead", "전신 클립을 재생 헤드에서 컷했어요", "已在播放头处切开 Full-Body 片段"));
 	}
 
 	function changeMotionSegmentSpeed(id, speed) {
 		if (!motion) return;
 		const current = motion.editSegments ?? createMotionEdit(motionFullRef.current.get(activeChar.id)?.frames ?? motion.frames);
 		editMotionSegments(setMotionSegmentSpeed(current, id, speed));
-		setToast(ko(`${speed}× speed applied to the selected segment`, `선택한 구간을 ${speed}×로 설정했어요`));
+		setToast(ko(`${speed}× speed applied to the selected segment`, `선택한 구간을 ${speed}×로 설정했어요`, `已将选中片段设为 ${speed}×`));
 	}
 
 	/** Drop one Full-Body segment from the take. The removal composes like a
@@ -5866,13 +5860,13 @@ globalThis.playMode = centerTab === "play";
 		if (!motion) return;
 		const current = motion.editSegments ?? createMotionEdit(motionFullRef.current.get(activeChar.id)?.frames ?? motion.frames);
 		if (current.length <= 1) {
-			setToast(ko("The only segment cannot be deleted — use ✕ Motion to clear the take", "마지막 남은 구간은 지울 수 없어요 — ✕ 모션으로 테이크를 비워요"));
+			setToast(ko("The only segment cannot be deleted — use ✕ Motion to clear the take", "마지막 남은 구간은 지울 수 없어요 — ✕ 모션으로 테이크를 비워요", "最后一段不能删 — 用 ✕ 动作清空这条"));
 			return;
 		}
 		const next = removeMotionSegment(current, id);
 		if (next === current) return;
 		editMotionSegments(next);
-		setToast(ko("Segment removed — right-click a trim handle to restore the full take", "구간을 지웠어요 — 핸들 우클릭으로 전체 테이크 복원"));
+		setToast(ko("Segment removed — right-click a trim handle to restore the full take", "구간을 지웠어요 — 핸들 우클릭으로 전체 테이크 복원", "已删区间 — 右键手柄可恢复整条"));
 	}
 
 	// Everyone EXCEPT the active character, posed at an absolute frame from
@@ -5986,8 +5980,8 @@ globalThis.playMode = centerTab === "play";
 			}
 			setIkMode(true);
 			setToast(motion
-				? ko("IK mode — correct the motion; drag end keys the fix at this frame", "IK 모드 — 모션을 보정합니다. 드래그를 끝내면 이 프레임에 보정 키가 찍혀요")
-				: ko("IK mode — drag handles in the main view; the shot camera stays frozen in the inset", "IK 모드 — 메인 뷰에서 핸들을 드래그하세요. 샷 카메라는 인셋에 고정됩니다"));
+				? ko("IK mode — correct the motion; drag end keys the fix at this frame", "IK 모드 — 모션을 보정합니다. 드래그를 끝내면 이 프레임에 보정 키가 찍혀요", "IK 模式 — 修正动作；拖完会在这一帧打下修正关键帧")
+				: ko("IK mode — drag handles in the main view; the shot camera stays frozen in the inset", "IK 모드 — 메인 뷰에서 핸들을 드래그하세요. 샷 카메라는 인셋에 고정됩니다", "IK 模式 — 在主视图拖手柄；镜头相机停在内嵌视图里"));
 			return;
 		}
 		// Exit: the keyed pose stays — the evaluate effect re-applies the
@@ -5995,7 +5989,7 @@ globalThis.playMode = centerTab === "play";
 		// the user authored is lost by toggling. Untracked/unkeyed parts keep
 		// their current (FK) pose.
 		leaveIkMode();
-		setToast(ko("IK mode off — keyed poses keep playing", "IK 모드 꺼짐 — 키로 찍은 포즈는 계속 재생됩니다"));
+		setToast(ko("IK mode off — keyed poses keep playing", "IK 모드 꺼짐 — 키로 찍은 포즈는 계속 재생됩니다", "IK 模式已关 — 打过关键帧的姿势会继续播放"));
 	}
 
 	// Drag solve, routed by handle kind: chain targets solve the two-bone
@@ -6087,7 +6081,7 @@ globalThis.playMode = centerTab === "play";
 		if (ikStateRef.current.tracked.size > 0) recordCharacterUndo();
 		ikBakeKeyframe(ikChains, ikStateRef.current, tlFrame, ikFkJoints);
 		setIkTick((n) => n + 1);
-		setToast(isKo ? `${tlFrame}프레임에 전신 IK 키를 추가했어요` : `Full-body IK key at frame ${tlFrame}`);
+		setToast(ko(`Full-body IK key at frame ${tlFrame}`, `${tlFrame}프레임에 전신 IK 키를 추가했어요`, `已在第 ${tlFrame} 帧添加全身 IK 关键帧`));
 	}
 
 	// Self-collision cleanup: push interpenetrating body parts apart with the
@@ -6136,19 +6130,19 @@ globalThis.playMode = centerTab === "play";
 		// and the props at this frame's placement.
 		const result = fixCollisions(activeRig, ikChains, { ikState: ikStateRef.current, fkJoints: ikFkJoints, blockers: externalBlockers(tlFrame) });
 		if (!result.supported) {
-			setToast(ko("This rig doesn't support collision cleanup", "이 리그는 신체 관통 정리를 지원하지 않아요"));
+			setToast(ko("This rig doesn't support collision cleanup", "이 리그는 신체 관통 정리를 지원하지 않아요", "这个绑定不支持身体穿透清理"));
 			return;
 		}
 		if (!result.changed) {
-			setToast(ko("No body collisions at this frame", "이 프레임에는 신체 관통이 없어요"));
+			setToast(ko("No body collisions at this frame", "이 프레임에는 신체 관통이 없어요", "这一帧没有身体穿透"));
 			return;
 		}
 		if (ikStateRef.current.tracked.size > 0) recordCharacterUndo();
 		ikBakeKeyframe(ikChains, ikStateRef.current, tlFrame, ikFkJoints, result.touched, null, result.baseQuats);
 		setIkTick((n) => n + 1);
 		setToast(result.residual > 1e-4
-			? ko(`Collisions reduced (residual ${(result.residual * 100).toFixed(1)} cm)`, `관통을 줄였어요 (잔여 ${(result.residual * 100).toFixed(1)} cm)`)
-			: ko(`Collisions fixed at frame ${tlFrame}`, `프레임 ${tlFrame}의 관통을 정리했어요`));
+			? ko(`Collisions reduced (residual ${(result.residual * 100).toFixed(1)} cm)`, `관통을 줄였어요 (잔여 ${(result.residual * 100).toFixed(1)} cm)`, `已减少穿透（残留 ${(result.residual * 100).toFixed(1)} cm)`)
+			: ko(`Collisions fixed at frame ${tlFrame}`, `프레임 ${tlFrame}의 관통을 정리했어요`, `已整理第 ${tlFrame} 帧的穿透`));
 	}
 
 	// Whole-clip variant: walk the motion frame by frame, clean each pose and
@@ -6159,7 +6153,7 @@ globalThis.playMode = centerTab === "play";
 		// Screened before the undo entry: an unsupported rig would record an
 		// undo step for a walk that keys nothing, leaving a no-op in history.
 		if (!collisionCleanupSupported) {
-			setToast(ko("This rig doesn't support collision cleanup", "이 리그는 신체 관통 정리를 지원하지 않아요"));
+			setToast(ko("This rig doesn't support collision cleanup", "이 리그는 신체 관통 정리를 지원하지 않아요", "这个绑定不支持身体穿透清理"));
 			return;
 		}
 		const currentFrame = tlFrame;
@@ -6217,16 +6211,16 @@ globalThis.playMode = centerTab === "play";
 		// (another body and a prop, say) can come out of the walk still touching,
 		// and silence would read as "all clean".
 		const stillPenetrating = unresolved.length
-			? ko(` · ${unresolved.length} frame(s) still penetrate`, ` · ${unresolved.length}개 프레임은 남아 있어요`)
+			? ko(` · ${unresolved.length} frame(s) still penetrate`, ` · ${unresolved.length}개 프레임은 남아 있어요`, ` · 仍有 ${unresolved.length} 帧存在穿透`)
 			: "";
 		// "No body collisions" must never share a sentence with "still
 		// penetrate": a converged pass over an unfixable clip has nothing more
 		// to do, which is a different statement from the clip being clean.
 		setToast((keyed.length
-			? ko(`Fixed collisions on ${keyed.length} frame(s)`, `${keyed.length}개 프레임의 관통을 정리했어요`)
+			? ko(`Fixed collisions on ${keyed.length} frame(s)`, `${keyed.length}개 프레임의 관통을 정리했어요`, `已整理 ${keyed.length} 帧的穿透`)
 			: unresolved.length
-				? ko("Nothing more to fix", "더 고칠 수 있는 게 없어요")
-				: ko("No body collisions in the clip", "클립에 신체 관통이 없어요")) + stillPenetrating);
+				? ko("Nothing more to fix", "더 고칠 수 있는 게 없어요", "没有更多可修的了")
+				: ko("No body collisions in the clip", "클립에 신체 관통이 없어요", "这段没有身体穿透")) + stillPenetrating);
 	}
 
 
@@ -6256,13 +6250,13 @@ globalThis.playMode = centerTab === "play";
 		ikStateRef.current.tracked = new Set(physicsPreview.candidate.tracked);
 		autoPhysicsRunRef.current = { motion, rig: activeRig, stamp: physicsKeyStamp(ikStateRef.current.keys) };
 		setPhysicsPreview(null); setIkTick((n) => n + 1);
-		setToast(ko("AutoPhysics applied · Undo restores the original", "오토피직스를 적용했어요 · 실행 취소로 원본 복구"));
+		setToast(ko("AutoPhysics applied · Undo restores the original", "오토피직스를 적용했어요 · 실행 취소로 원본 복구", "已应用自动物理 · 撤销可恢复原状"));
 	}
 	async function runAutoPhysics() {
 		if (autoPhysicsRunning || !ikChains || !activeRig || !motion || ikStateRef.current.rig !== activeRig) return null;
 		const previous = autoPhysicsRunRef.current;
 		if (previous?.motion === motion && previous.rig === activeRig && previous.stamp === physicsKeyStamp(ikStateRef.current.keys)) {
-			setToast(ko("Already applied. Undo to review this correction again.", "이미 적용했어요. 실행 취소 후 다시 비교할 수 있어요.")); return null;
+			setToast(ko("Already applied. Undo to review this correction again.", "이미 적용했어요. 실행 취소 후 다시 비교할 수 있어요.", "已经应用了。撤销后可以再对比一次。")); return null;
 		}
 		const job = ++physicsJobRef.current, frame = tlFrame;
 		const sourceKeys = copyPhysicsKeys(ikStateRef.current.keys), stamp = physicsKeyStamp(sourceKeys);
@@ -6298,7 +6292,7 @@ globalThis.playMode = centerTab === "play";
 			setPhysicsPreview(result); setPhysicsShow(true);
 			return { before: result.before, after: result.after, warnings: result.warnings, unresolved: result.unresolved, contacts: result.contacts.spans };
 		} catch (error) {
-			if (physicsJobRef.current === job) setToast(ko(`AutoPhysics: ${error.message}`, `오토피직스: ${error.message}`));
+			if (physicsJobRef.current === job) setToast(ko(`AutoPhysics: ${error.message}`, `오토피직스: ${error.message}`, `自动物理：${error.message}`));
 			return null;
 		} finally {
 			if (physicsJobRef.current === job) { restore(); setAutoPhysicsRunning(false); setIkTick((n) => n + 1); }
@@ -6340,9 +6334,7 @@ globalThis.playMode = centerTab === "play";
 		// Handles re-seat on the posed effectors, ready to drag into a refinement.
 		ikSeedTargets(ikChains, ikStateRef.current);
 		setIkTick((n) => n + 1);
-		setToast(isKo
-			? `${tlFrame}프레임에 포즈를 전신 IK 보정 키로 추가했어요 — 모션은 그대로예요`
-			: `Pose keyed as a full-body IK correction at frame ${tlFrame} — the take stays`);
+		setToast(ko(`Pose keyed as a full-body IK correction at frame ${tlFrame} — the take stays`, `${tlFrame}프레임에 포즈를 전신 IK 보정 키로 추가했어요 — 모션은 그대로예요`, `已在第 ${tlFrame} 帧把姿势打成全身 IK 修正 — 镜头本身不变`));
 		return true;
 	}
 
@@ -6666,11 +6658,11 @@ globalThis.playMode = centerTab === "play";
 	}, [activeChar.x, activeChar.z, tlFps, waypoints]);
 
 	const stateBadge = ardyRunning
-		? { label: ko("GENERATING", "생성 중"), kind: "generating" }
+		? { label: ko("GENERATING", "생성 중", "生成中"), kind: "generating" }
 		: motion
-			? { label: ko("PLAYBACK", "재생"), kind: "playback" }
+			? { label: ko("PLAYBACK", "재생", "播放"), kind: "playback" }
 			: waypointMode
-				? { label: ko("ROOT PATH", "루트 경로"), kind: "root" }
+				? { label: ko("ROOT PATH", "루트 경로", "根路径"), kind: "root" }
 				: null;
 
 	function openStudio(charId) {
@@ -6698,7 +6690,7 @@ globalThis.playMode = centerTab === "play";
 		trackFeature("pose_edit");
 		const pose = {
 			id: `custom_${Date.now()}`,
-			label: isKo ? `내 포즈 ${customPoses.length + 1}` : `My Pose ${customPoses.length + 1}`,
+			label: ko(`My Pose ${customPoses.length + 1}`, `내 포즈 ${customPoses.length + 1}`, `我的姿势 ${customPoses.length + 1}`),
 			prompt: "in the exact body pose shown in the blocking frame",
 			bones: capturePose(activeRig),
 			// A take frame carries its measured hips height; bottling the frame
@@ -6711,8 +6703,8 @@ globalThis.playMode = centerTab === "play";
 		saveCustomPoses(next);
 		setStudioPick(pose.id);
 		setToast(motion
-			? ko(`Saved this frame's pose to the library as “${pose.label}”`, `지금 프레임의 자세를 “${pose.label}”로 라이브러리에 저장했어요`)
-			: ko(`Saved the current pose to the library as “${pose.label}”`, `지금 자세를 “${pose.label}”로 라이브러리에 저장했어요`));
+			? ko(`Saved this frame's pose to the library as “${pose.label}”`, `지금 프레임의 자세를 “${pose.label}”로 라이브러리에 저장했어요`, `已将这一帧姿势以“${pose.label}”存入库`)
+			: ko(`Saved the current pose to the library as “${pose.label}”`, `지금 자세를 “${pose.label}”로 라이브러리에 저장했어요`, `已将当前姿势以“${pose.label}”存入库`));
 	}
 
 	function savePose() {
@@ -6721,7 +6713,7 @@ globalThis.playMode = centerTab === "play";
 		trackFeature("pose_edit");
 		const pose = {
 			id: `custom_${Date.now()}`,
-		label: isKo ? `내 포즈 ${customPoses.length + 1}` : `My Pose ${customPoses.length + 1}`,
+		label: ko(`My Pose ${customPoses.length + 1}`, `내 포즈 ${customPoses.length + 1}`, `我的姿势 ${customPoses.length + 1}`),
 			prompt: "in the exact body pose shown in the blocking frame",
 			bones: capturePose(rig),
 			custom: true,
@@ -6734,7 +6726,7 @@ globalThis.playMode = centerTab === "play";
 		// posed character is, and setPosed only writes when one is being posed.
 		if (posingIndex >= 0) recordCharacterUndo();
 		setPosed(pose);
-		setToast(ko("Pose saved", "포즈 저장됨"));
+		setToast(ko("Pose saved", "포즈 저장됨", "姿势已保存"));
 	}
 
 	/**
@@ -6835,16 +6827,13 @@ globalThis.playMode = centerTab === "play";
 				// Name the fallback in the same slot the fit warning uses: the
 				// landmark route is the reduced-accuracy path, and that is worth
 				// one sentence more than a partly-occluded limb.
-				const fallbackNote = ko(
-					"GPU pose extraction failed, so this pose came from the browser landmarker (less accurate in depth).",
-					"GPU 자세 추출이 실패해서 브라우저 추정으로 잡았어요 (깊이 정확도가 낮아요)."
-				);
+				const fallbackNote = ko("GPU pose extraction failed, so this pose came from the browser landmarker (less accurate in depth).", "GPU 자세 추출이 실패해서 브라우저 추정으로 잡았어요 (깊이 정확도가 낮아요).", "GPU 姿势提取失败，所以这次用的是浏览器估点（深度不太准）。");
 				warning = warning ? `${fallbackNote} ${warning}` : fallbackNote;
 			}
 			console.info(`photo pose: route=${route}`);
 			const pose = {
 				id: `photo_${Date.now()}`,
-				label: isKo ? `사진 포즈 ${customPoses.length + 1}` : `Photo Pose ${customPoses.length + 1}`,
+				label: ko(`Photo Pose ${customPoses.length + 1}`, `사진 포즈 ${customPoses.length + 1}`, `照片姿势 ${customPoses.length + 1}`),
 				prompt: "in the exact body pose shown in the reference photograph",
 				bones,
 				rootY,
@@ -6875,17 +6864,17 @@ globalThis.playMode = centerTab === "play";
 			// toasts in a row means the first one is never read. (The GPU route
 			// leaves it empty — SAM measures the whole body or fails outright.)
 			setToast(warning
-				? (hadMotion ? `${ko("Cleared the motion.", "모션을 지웠어요.")} ${warning}` : warning)
+				? (hadMotion ? `${ko("Cleared the motion.", "모션을 지웠어요.", "已清除动作。")} ${warning}` : warning)
 				: hadMotion
-					? ko("Cleared the motion and posed from the photo — refine it with the handles", "모션을 지우고 사진으로 자세를 잡았어요 — 핸들로 다듬어 보세요")
-					: ko("Pose read from the photo — refine it with the handles", "사진에서 자세를 읽었어요 — 핸들로 다듬어 보세요"));
+					? ko("Cleared the motion and posed from the photo — refine it with the handles", "모션을 지우고 사진으로 자세를 잡았어요 — 핸들로 다듬어 보세요", "已清除动作，并按照片摆好姿势 — 再用手柄微调")
+					: ko("Pose read from the photo — refine it with the handles", "사진에서 자세를 읽었어요 — 핸들로 다듬어 보세요", "已从照片读出姿势 — 用手柄再微调"));
 		} catch (error) {
 			const code = error?.message ?? String(error);
 			// fitLandmarksToPose refuses a sample whose torso is not visible; that is
 			// a photograph problem, not an engine problem, so it is named as one.
 			const named = code.startsWith("fitLandmarksToPose:") ? "pose-partly-occluded" : code;
 			setPhotoPoseState("error");
-			setPhotoPoseError(MULTIMODEL_REASONS[named]?.[isKo ? 1 : 0] ?? named);
+			setPhotoPoseError(pick(MULTIMODEL_REASONS[named]) ?? named);
 		} finally {
 			if (objectUrl) URL.revokeObjectURL(objectUrl);
 		}
@@ -6958,7 +6947,7 @@ globalThis.playMode = centerTab === "play";
 		write
 			.then(() => {
 				setCopied(true);
-				setToast(ko("Prompt copied to clipboard", "프롬프트를 클립보드에 복사했어요"));
+				setToast(ko("Prompt copied to clipboard", "프롬프트를 클립보드에 복사했어요", "提示词已复制到剪贴板"));
 			})
 			.catch(() => {});
 	}
@@ -7071,7 +7060,7 @@ globalThis.playMode = centerTab === "play";
 			// named for the seat they take in a first/last-frame video request
 			save(result.frame, "blocking-frame-A-start.png");
 			save(result.frameB, "blocking-frame-B-end.png");
-			setToast(ko("Start & end frames downloaded", "시작·끝 프레임 다운로드됨"));
+			setToast(ko("Start & end frames downloaded", "시작·끝 프레임 다운로드됨", "已下载起止帧"));
 			setResult((current) => current ? { ...current, downloaded: true } : current);
 			track("export:blocking_frame_succeeded", { format: "png" });
 			trackFeature("export_frame");
@@ -7079,7 +7068,7 @@ globalThis.playMode = centerTab === "play";
 			return;
 		}
 		save(result.frame, "blocking-frame.png");
-		setToast(ko("Frame downloaded", "프레임 다운로드됨"));
+		setToast(ko("Frame downloaded", "프레임 다운로드됨", "帧已下载"));
 		setResult((current) => current ? { ...current, downloaded: true } : current);
 		track("export:blocking_frame_succeeded", { format: "png" });
 		trackFeature("export_frame");
@@ -7088,7 +7077,7 @@ globalThis.playMode = centerTab === "play";
 	function downloadArdyPose() {
 		const rig = posedRig();
 		if (!rig) {
-			setToast(ko("Character not loaded yet", "캐릭터가 아직 로드되지 않았어요"));
+			setToast(ko("Character not loaded yet", "캐릭터가 아직 로드되지 않았어요", "人物还没载入"));
 			return;
 		}
 		trackFeature("export_pose");
@@ -7111,7 +7100,7 @@ globalThis.playMode = centerTab === "play";
 		a.click();
 		a.remove();
 		URL.revokeObjectURL(url);
-		setToast(ko("ARDY pose exported", "ARDY 포즈 내보내기 완료"));
+		setToast(ko("ARDY pose exported", "ARDY 포즈 내보내기 완료", "ARDY 姿势已导出"));
 	}
 	// Keep the optional sidecar live instead of freezing its startup state.
 	// Developers commonly open the studio first and start `npm run bridge`
@@ -7250,7 +7239,7 @@ function resizePromptClip(id, edge, rawFrame) {
 		try {
 			return resolveSeed(ardySeed, ARDY_SEED_MAX);
 		} catch {
-			setToast(isKo ? `Seed는 0..${ARDY_SEED_MAX} 범위의 정수여야 해요. 비워 두면 자동으로 선택됩니다` : `Seed must be an integer in 0..${ARDY_SEED_MAX} — clear it to let the box pick one`);
+			setToast(ko(`Seed must be an integer in 0..${ARDY_SEED_MAX} — clear it to let the box pick one`, `Seed는 0..${ARDY_SEED_MAX} 범위의 정수여야 해요. 비워 두면 자동으로 선택됩니다`, `Seed 必须是 0..${ARDY_SEED_MAX} 的整数。留空则自动选择`));
 			return null;
 		}
 	}
@@ -7369,10 +7358,7 @@ function resizePromptClip(id, edge, rawFrame) {
 		if (!linePins.length) return;
 		setLinePins([]);
 		if (toast) {
-			setToast(ko(
-				"Pins cleared — one edit is one gesture, and this one is now the path",
-				"찍은 순간을 지웠어요 — 한 번의 편집은 한 가지 방식이라, 지금은 궤적 편집이에요",
-			));
+			setToast(ko("Pins cleared — one edit is one gesture, and this one is now the path", "찍은 순간을 지웠어요 — 한 번의 편집은 한 가지 방식이라, 지금은 궤적 편집이에요", "钉点已清除 — 一次编辑是一个手势，现在这条就是路径"));
 		}
 	}
 
@@ -7496,10 +7482,7 @@ function resizePromptClip(id, edge, rawFrame) {
 	 * that refuses a new gesture. ONE spelling, because a hint that disagreed
 	 * with the refusal would read as two different problems. */
 	function lineDriftHint() {
-		return ko(
-			"The view moved — the pending edit still applies; the dashed line is that same edit seen from here. Return toward the original view to grab it again, or Generate/undo from here.",
-			"시점이 움직였어요 — 편집한 궤적은 그대로 적용되며, 점선은 같은 궤적을 지금 시점에서 본 모습입니다. 다시 잡으려면 원래 시점 쪽으로 돌아가고, 지금 이 상태에서 생성하거나 되돌려도 됩니다.",
-		);
+		return ko("The view moved — the pending edit still applies; the dashed line is that same edit seen from here. Return toward the original view to grab it again, or Generate/undo from here.", "시점이 움직였어요 — 편집한 궤적은 그대로 적용되며, 점선은 같은 궤적을 지금 시점에서 본 모습입니다. 다시 잡으려면 원래 시점 쪽으로 돌아가고, 지금 이 상태에서 생성하거나 되돌려도 됩니다.", "视角动了 — 未提交的编辑仍在；虚线就是从这里看到的同一处编辑。转回原视角再抓，或在这里生成/撤销。");
 	}
 
 	/** The drifted ghost, RE-ANCHORED: lift the committed edit into world space
@@ -8509,11 +8492,11 @@ function resizePromptClip(id, edge, rawFrame) {
 	 * the step count. Returns `{ ok: false, message }` with copy already
 	 * localized, or `{ ok: true, body, lineEdit, seed }`. */
 	function buildLineEditRequest(curve, { preview = false } = {}) {
-		const refuse = (copy) => ({ ok: false, message: ko(copy[0], copy[1]) });
+		const refuse = (copy) => ({ ok: false, message: ko(copy[0], copy[1], copy[2]) });
 		const sourceUrl = takeSourceUrl;
 		if (!sourceUrl) return refuse(LINE_EDIT_REFUSALS.sourceMotion);
 		if (!curve) {
-			return refuse(["Pull the path first — grab a dot on it and drag", "커브를 먼저 잡아당겨 주세요"]);
+			return refuse(["Pull the path first — grab a dot on it and drag", "커브를 먼저 잡아당겨 주세요", "请先拉路径 — 抓住上面的点拖动"]);
 		}
 		// PINS take the other branch of C6 entirely: no points2d, no camera. The
 		// prompt and the seed rule below are shared, because those belong to the
@@ -8588,7 +8571,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			linePreviewShownRef.current = url;
 			setLinePreviewUrl(url);
 		} catch {
-			setLinePreviewError(ko("The preview could not be read back", "미리보기를 읽지 못했어요"));
+			setLinePreviewError(ko("The preview could not be read back", "미리보기를 읽지 못했어요", "没能读回预览"));
 			await revertLinePreview();
 		}
 	}
@@ -8740,11 +8723,11 @@ function resizePromptClip(id, edge, rawFrame) {
 	function toggleLineEditMode() {
 		if (lineEditMode) {
 			exitLineEditMode();
-			setToast(ko("Line editing off", "라인 편집 꺼짐"));
+			setToast(ko("Line editing off", "라인 편집 꺼짐", "轨迹编辑已关"));
 			return;
 		}
 		if (!motion?.url) {
-			setToast(ko("The current take has no bridge source — generate it once before editing a path", "현재 테이크에 브리지 원본이 없어요 — 궤적을 편집하기 전에 한 번 생성하세요"));
+			setToast(ko("The current take has no bridge source — generate it once before editing a path", "현재 테이크에 브리지 원본이 없어요 — 궤적을 편집하기 전에 한 번 생성하세요", "当前条没有桥接源 — 编辑轨迹前请先生成一次"));
 			return;
 		}
 		if (waypointMode) setWaypointMode(false);
@@ -8752,10 +8735,7 @@ function resizePromptClip(id, edge, rawFrame) {
 		if (posing) setPosing(null);
 		clearLineEdit();
 		setLineEditMode(true);
-		setToast(ko(
-			"Path editing on — draw along the path to reroute that section, or grab a dot and pull; the view still orbits normally",
-			"궤적 편집 켜짐 — 궤적을 따라 그리면 그 구간만 새로 지나가고, 점을 잡아 끌 수도 있어요. 시점은 평소처럼 돌릴 수 있어요",
-		));
+		setToast(ko("Path editing on — draw along the path to reroute that section, or grab a dot and pull; the view still orbits normally", "궤적 편집 켜짐 — 궤적을 따라 그리면 그 구간만 새로 지나가고, 점을 잡아 끌 수도 있어요. 시점은 평소처럼 돌릴 수 있어요", "路径编辑已开 — 沿路径重画这一段，或抓住点拉；视角仍可正常环绕"));
 	}
 
 	/* Switching joint, range, take or character drops any pull in hand: it was
@@ -8801,9 +8781,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			}
 			const hidden = live.curve.reduce((count, point) => count + (isCurvePointOnScreen(point) ? 0 : 1), 0);
 			if (hidden > 0) {
-				setToast(isKo
-					? `이 구간의 ${hidden}프레임이 화면 밖이에요 — 구간 전체가 보이도록 시점을 잡아 주세요`
-					: `${hidden} frame(s) of this range are outside the frame — orbit until the whole range is in view`);
+				setToast(ko(`${hidden} frame(s) of this range are outside the frame — orbit until the whole range is in view`, `이 구간의 ${hidden}프레임이 화면 밖이에요 — 구간 전체가 보이도록 시점을 잡아 주세요`, `这段有 ${hidden} 帧在画面外 — 请转到整段都看得见`));
 			}
 		};
 		check();
@@ -9024,24 +9002,18 @@ function resizePromptClip(id, edge, rawFrame) {
 		trackGenerateBlocked("timeline");
 		if (ardyRunning) return;
 		if (!takeSourceUrl) {
-			setToast(ko("The current take has no bridge source — generate it once before editing a path", "현재 테이크에 브리지 원본이 없어요 — 궤적을 편집하기 전에 한 번 생성하세요"));
+			setToast(ko("The current take has no bridge source — generate it once before editing a path", "현재 테이크에 브리지 원본이 없어요 — 궤적을 편집하기 전에 한 번 생성하세요", "当前条没有桥接源 — 编辑轨迹前请先生成一次"));
 			return;
 		}
 		// No curve object means no edit — an untouched path is the take's own
 		// trajectory, and sending it would ask the box to spend eight seconds
 		// reproducing what is already there.
 		if (!lineEditPayload) {
-			setToast(ko(
-				"Draw along the path, pull a dot, or pin a moment first",
-				"먼저 궤적을 따라 그리거나, 점을 잡아당기거나, 순간을 찍어 주세요",
-			));
+			setToast(ko("Draw along the path, pull a dot, or pin a moment first", "먼저 궤적을 따라 그리거나, 점을 잡아당기거나, 순간을 찍어 주세요", "请先沿路径画、拉一个点，或钉住一瞬"));
 			return;
 		}
 		if (!lineEditBackend) {
-			setToast(ko(
-				"The line-editing backend is not connected yet",
-				"라인 편집 백엔드가 아직 연결 전이에요",
-			));
+			setToast(ko("The line-editing backend is not connected yet", "라인 편집 백엔드가 아직 연결 전이에요", "路径编辑后端还没连上"));
 			return;
 		}
 		const request = buildLineEditRequest(lineEditPayload);
@@ -9070,7 +9042,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			// (stripSourceMotion keeps only C10's replay keys, so `preview` — when
 			// the object came back from a draft build — cannot leak into a recipe.)
 			recipeLineEdit: stripSourceMotion({ ...lineEdit, sourceMotion: undefined, seed }),
-			recipeLabel: isKo ? `다듬기 · ${lineTrackLabel(lineTrack)}` : `Refine · ${lineTrackLabel(lineTrack)}`,
+			recipeLabel: ko(`Refine · ${lineTrackLabel(lineTrack)}`, `다듬기 · ${lineTrackLabel(lineTrack)}`, `精修 · ${lineTrackLabel(lineTrack)}`),
 		});
 		// The pull has left the building. The curve stays (it is the reference
 		// the next edit starts from) but its deformation is released, so the
@@ -9091,7 +9063,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			.filter((clip) => clip.text.trim())
 			.sort((a, b) => a.startFrame - b.startFrame);
 		if (!clips.length) {
-			setToast(ko("Add at least one Prompt Block before generating", "생성하기 전에 프롬프트 블록을 하나 이상 추가하세요"));
+			setToast(ko("Add at least one Prompt Block before generating", "생성하기 전에 프롬프트 블록을 하나 이상 추가하세요", "生成前请至少加一块提示词"));
 			return;
 		}
 		const totalFrames = Math.max(...clips.map((clip) => clip.endFrame));
@@ -9129,7 +9101,7 @@ function resizePromptClip(id, edge, rawFrame) {
 		const rig = posing ? posedRig() : activeRig;
 		const rigModel = posing ? (posingChar?.model ?? activeChar.model) : activeChar.model;
 		if (!rig) {
-			setToast(ko("Character not loaded yet", "캐릭터가 아직 로드되지 않았어요"));
+			setToast(ko("Character not loaded yet", "캐릭터가 아직 로드되지 않았어요", "人物还没载入"));
 			return;
 		}
 		// Root guidance sends only authored sparse keys. ARDY owns every
@@ -9138,11 +9110,11 @@ function resizePromptClip(id, edge, rawFrame) {
 		// values here, before any pose build or network, with a specific toast.
 		const prompt = promptOverride.trim();
 		if (!prompt) {
-			setToast(ko("Motion prompt is required — describe what the subject should do before generating", "모션 프롬프트가 필요해요 — 생성 전에 피사체가 할 동작을 설명하세요"));
+			setToast(ko("Motion prompt is required — describe what the subject should do before generating", "모션 프롬프트가 필요해요 — 생성 전에 피사체가 할 동작을 설명하세요", "需要动作提示词 — 生成前先写人物要做什么"));
 			return;
 		}
 		if (prompt.length > ARDY_PROMPT_MAX) {
-			setToast(isKo ? `모션 프롬프트는 ${ARDY_PROMPT_MAX}자까지예요(현재 ${prompt.length}자). 생성 전에 줄여 주세요` : `Motion prompt is capped at ${ARDY_PROMPT_MAX} characters (currently ${prompt.length}) — shorten it before generating`);
+			setToast(ko(`Motion prompt is capped at ${ARDY_PROMPT_MAX} characters (currently ${prompt.length}) — shorten it before generating`, `모션 프롬프트는 ${ARDY_PROMPT_MAX}자까지예요(현재 ${prompt.length}자). 생성 전에 줄여 주세요`, `动作提示词最多 ${ARDY_PROMPT_MAX} 字（当前 ${prompt.length} 字）。生成前请缩短`));
 			return;
 		}
 		// Regeneration must keep the loaded clip's exact frame count. The form
@@ -9152,7 +9124,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			? motion.frames / motion.fps
 			: Math.round(Number(durationOverride)) || ARDY_DURATION_MIN;
 		if (duration < ARDY_DURATION_MIN || duration > ARDY_DURATION_MAX) {
-			setToast(isKo ? `길이는 ${ARDY_DURATION_MIN}초에서 ${ARDY_DURATION_MAX}초 사이여야 해요` : `Duration must be between ${ARDY_DURATION_MIN} and ${ARDY_DURATION_MAX} seconds`);
+			setToast(ko(`Duration must be between ${ARDY_DURATION_MIN} and ${ARDY_DURATION_MAX} seconds`, `길이는 ${ARDY_DURATION_MIN}초에서 ${ARDY_DURATION_MAX}초 사이여야 해요`, `时长必须在 ${ARDY_DURATION_MIN} 到 ${ARDY_DURATION_MAX} 秒之间`));
 			return;
 		}
 		// THE SEED RULE (C9): rolled when the field is empty, kept when it is
@@ -9180,15 +9152,15 @@ function resizePromptClip(id, edge, rawFrame) {
 			: [];
 		if (waypointMode) {
 			if (waypoints.length < 1) {
-				setToast(ko("Add at least one root destination before generating", "생성하기 전에 루트 목적지를 하나 이상 추가하세요"));
+				setToast(ko("Add at least one root destination before generating", "생성하기 전에 루트 목적지를 하나 이상 추가하세요", "生成前请至少加一个根目标点"));
 				return;
 			}
 			if (rootPath.length > MAX_WAYPOINTS) {
-				setToast(isKo ? `루트 경로는 드문 웨이포인트 ${MAX_WAYPOINTS}개까지 사용할 수 있어요` : `The root path is capped at ${MAX_WAYPOINTS} sparse waypoints`);
+				setToast(ko(`The root path is capped at ${MAX_WAYPOINTS} sparse waypoints`, `루트 경로는 드문 웨이포인트 ${MAX_WAYPOINTS}개까지 사용할 수 있어요`, `根路径最多 ${MAX_WAYPOINTS} 个稀疏路径点`));
 				return;
 			}
 			if (waypoints.some((waypoint) => waypoint.frame <= 0 || waypoint.frame >= clipFrames)) {
-				setToast(isKo ? `루트 웨이포인트 프레임은 1..${clipFrames - 1} 안에 있어야 해요` : `Root waypoint frames must stay inside 1..${clipFrames - 1}`);
+				setToast(ko(`Root waypoint frames must stay inside 1..${clipFrames - 1}`, `루트 웨이포인트 프레임은 1..${clipFrames - 1} 안에 있어야 해요`, `根路径点帧必须在 1..${clipFrames - 1} 内`));
 				return;
 			}
 			// Placement-time checks can be invalidated afterwards (removing a
@@ -9200,15 +9172,13 @@ function resizePromptClip(id, edge, rawFrame) {
 			// pins were authored on, which is now the timeline's.
 			const pathVerdict = judgeAuthoredPath(rootPath, TIMELINE_FPS, clipFrames, { chained: hasPromptSchedule });
 			if (pathVerdict.errors.length > 0) {
-				setToast(isKo ? `생성하지 못했어요 — ${pathVerdict.errors[0]}` : `Not generated — ${pathVerdict.errors[0]}`);
+				setToast(ko(`Not generated — ${pathVerdict.errors[0]}`, `생성하지 못했어요 — ${pathVerdict.errors[0]}`, `无法生成 — ${pathVerdict.errors[0]}`));
 				return;
 			}
 			if (hasAuthoredBlocks) {
 				const longBlock = segments.find((segment) => segment.endFrame - segment.startFrame > PROMPT_BLOCK_MAX_FRAMES);
 				if (longBlock) {
-					setToast(isKo
-						? `생성하지 못했어요 — 프롬프트 블록은 ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS}초 이내여야 해요. ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)}초 블록을 나눠 주세요`
-						: `Not generated — prompt blocks are capped at ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS} s; split the ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)} s block`);
+					setToast(ko(`Not generated — prompt blocks are capped at ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS} s; split the ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)} s block`, `생성하지 못했어요 — 프롬프트 블록은 ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS}초 이내여야 해요. ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)}초 블록을 나눠 주세요`, `未生成 — 提示词块最长 ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS} 秒；请拆开 ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)} 秒的块`));
 					return;
 				}
 			}
@@ -9224,9 +9194,7 @@ function resizePromptClip(id, edge, rawFrame) {
 		if (!waypointMode && hasAuthoredBlocks) {
 			const longBlock = segments.find((segment) => segment.endFrame - segment.startFrame > PROMPT_BLOCK_MAX_FRAMES);
 			if (longBlock) {
-				setToast(isKo
-					? `생성하지 못했어요 — 프롬프트 블록은 ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS}초 이내여야 해요. ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)}초 블록을 나눠 주세요`
-					: `Not generated — prompt blocks are capped at ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS} s; split the ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)} s block`);
+				setToast(ko(`Not generated — prompt blocks are capped at ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS} s; split the ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)} s block`, `생성하지 못했어요 — 프롬프트 블록은 ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS}초 이내여야 해요. ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)}초 블록을 나눠 주세요`, `未生成 — 提示词块最长 ${PROMPT_BLOCK_MAX_FRAMES / TIMELINE_FPS} 秒；请拆开 ${((longBlock.endFrame - longBlock.startFrame) / TIMELINE_FPS).toFixed(1)} 秒的块`));
 				return;
 			}
 		}
@@ -9264,10 +9232,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			editedSegments,
 		});
 		if (pinPlan.blockedBy === PIN_BLOCKED.SCHEDULE) {
-			setToast(ko(
-				"Prompt blocks and a pose start cannot be combined — generating from the prompt alone.",
-				"프롬프트 블록과 포즈 시작은 함께 쓸 수 없어요 — 프롬프트만으로 생성합니다.",
-			));
+			setToast(ko("Prompt blocks and a pose start cannot be combined — generating from the prompt alone.", "프롬프트 블록과 포즈 시작은 함께 쓸 수 없어요 — 프롬프트만으로 생성합니다.", "提示词块和姿势起点不能一起用 — 只按提示词生成。"));
 		}
 		const shouldPin = pinPlan.pin;
 		const constraintFrames = pinPlan.frames;
@@ -9334,7 +9299,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			body.historyFrames = 4 * ARDY_FPS;
 		} else if (hasBlockEdits) {
 			if (!motion?.url) {
-				setToast(ko("The current motion has no bridge source; generate the prompt blocks once before regenerating IK edits", "현재 모션에 브리지 원본이 없어요. 프롬프트 블록을 한 번 생성한 뒤 IK 보정을 다시 생성하세요"));
+				setToast(ko("The current motion has no bridge source; generate the prompt blocks once before regenerating IK edits", "현재 모션에 브리지 원본이 없어요. 프롬프트 블록을 한 번 생성한 뒤 IK 보정을 다시 생성하세요", "当前动作没有桥接源。请先生成一次提示词块，再重新生成 IK 修正"));
 				return;
 			}
 			const startFrame = Math.min(...editedSegments.map((segment) => segment.startFrame));
@@ -9453,9 +9418,7 @@ function resizePromptClip(id, edge, rawFrame) {
 		if (replay.length > 0) {
 			body.replay = replay;
 			if (replayTruncated(takeRecipeRef.current)) {
-				setToast(isKo
-					? `다듬기는 한 번에 ${replay.length}개까지만 다시 적용돼요 — 먼저 한 ${replay.length}개만 이어집니다`
-					: `Only ${replay.length} refinements can be replayed at once — the first ${replay.length} carry over`);
+				setToast(ko(`Only ${replay.length} refinements can be replayed at once — the first ${replay.length} carry over`, `다듬기는 한 번에 ${replay.length}개까지만 다시 적용돼요 — 먼저 한 ${replay.length}개만 이어집니다`, `一次最多重放 ${replay.length} 次精修 — 先接下这 ${replay.length} 个`));
 			}
 		}
 		// The request is fully packaged HERE, against the active character's
@@ -9480,14 +9443,14 @@ function resizePromptClip(id, edge, rawFrame) {
 			recipeIntent: hasBlockEdits ? "carry" : "fresh",
 			recipeSeed: seed,
 			recipeLabel: hasBlockEdits
-				? ko("Block fix", "블록 수정")
+				? ko("Block fix", "블록 수정", "块修复")
 				: hasPromptSchedule
-					? ko("Blocks", "블록 생성")
+					? ko("Blocks", "블록 생성", "块生成")
 					: fresh
-						? ko("New", "새로 만들기")
+						? ko("New", "새로 만들기", "新建")
 						: motion?.url
-							? ko("Again", "다시 뽑기")
-							: ko("Generate", "생성"),
+							? ko("Again", "다시 뽑기", "再来一次")
+							: ko("Generate", "생성", "生成"),
 		});
 	}
 
@@ -9560,12 +9523,12 @@ function resizePromptClip(id, edge, rawFrame) {
 			return;
 		}
 		if (!motion?.url) {
-			setToast(ko("The current motion has no bridge source; generate the prompt blocks once before regenerating a trail edit", "현재 모션에 브리지 원본이 없어요. 궤적 수정을 재생성하려면 프롬프트 블록을 먼저 한 번 생성하세요"));
+			setToast(ko("The current motion has no bridge source; generate the prompt blocks once before regenerating a trail edit", "현재 모션에 브리지 원본이 없어요. 궤적 수정을 재생성하려면 프롬프트 블록을 먼저 한 번 생성하세요", "当前动作没有桥接源。要按轨迹修改重新生成，请先生成一次提示词块"));
 			return;
 		}
 		const rig = activeRig;
 		if (!rig) {
-			setToast(ko("Character not loaded yet", "캐릭터가 아직 로드되지 않았어요"));
+			setToast(ko("Character not loaded yet", "캐릭터가 아직 로드되지 않았어요", "人物还没载入"));
 			return;
 		}
 		const { startFrame, endFrame } = trailEditRange(motion.frames, trailEdit.grabFrame, trailEdit.radiusFrames);
@@ -9632,7 +9595,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			// describe the splice (C10 excludes motionEdit from replay outright).
 			recipeIntent: "carry",
 			recipeSeed: seed,
-			recipeLabel: ko("Trail fix", "궤적 수정"),
+			recipeLabel: ko("Trail fix", "궤적 수정", "轨迹修正"),
 		});
 		setTrailEdit(null);
 	}
@@ -9647,7 +9610,7 @@ function resizePromptClip(id, edge, rawFrame) {
 	function enqueueMotionJob(spec) {
 		const id = `gen-${++genJobSeq.current}`;
 		setGenQueue((queue) => [...queue, { id, status: "queued", ...spec }]);
-		setToast(isKo ? `인물 ${spec.charIndex + 1} 모션 생성을 대기열에 넣었어요` : `Queued motion generation for Subject ${spec.charIndex + 1}`);
+		setToast(ko(`Queued motion generation for Subject ${spec.charIndex + 1}`, `인물 ${spec.charIndex + 1} 모션 생성을 대기열에 넣었어요`, `已将人物 ${spec.charIndex + 1} 的动作生成加入队列`));
 	}
 	useEffect(() => {
 		if (genRunningRef.current) return;
@@ -9660,7 +9623,7 @@ function resizePromptClip(id, edge, rawFrame) {
 				await executeMotionJob(next);
 				setGenQueue((queue) => queue.map((job) => (job.id === next.id ? { ...job, status: "done" } : job)));
 			} catch (err) {
-				const message = err?.name === "AbortError" ? ko("Cancelled", "취소됨") : err?.message || String(err);
+				const message = err?.name === "AbortError" ? ko("Cancelled", "취소됨", "已取消") : err?.message || String(err);
 				setGenQueue((queue) => queue.map((job) => (job.id === next.id ? { ...job, status: "error", error: message } : job)));
 			} finally {
 				genRunningRef.current = false;
@@ -9672,7 +9635,7 @@ function resizePromptClip(id, edge, rawFrame) {
 		const controller = new AbortController();
 		ardyAbortRef.current = controller;
 		setArdyRunning(true);
-		reportArdyStatus(ko("connecting…", "연결 중…"));
+		reportArdyStatus(ko("connecting…", "연결 중…", "连接中…"));
 		setArdyReport(null);
 		setArdyOutcome(null);
 		// Replay notices belong to ONE run; the next run re-earns them.
@@ -9712,7 +9675,7 @@ function resizePromptClip(id, edge, rawFrame) {
 					)
 				)
 			) {
-				throw new Error(ko("ARDY returned motion without verified authored IK keys", "ARDY가 검증된 수동 IK 키 없이 모션을 반환했어요"));
+				throw new Error(ko("ARDY returned motion without verified authored IK keys", "ARDY가 검증된 수동 IK 키 없이 모션을 반환했어요", "ARDY 返回了动作，但没有经过验证的手写 IK 关键帧"));
 			}
 			setArdyOutcome({ ok: true, output: done.output, bytes: done.bytes, motionUrl: done.motionUrl, rotationDeg: job.rootRotationDeg });
 			track("motion:job_succeeded", { backend, duration_bucket: bucketMs(Date.now() - startedAt), input_mode: inputMode });
@@ -9733,7 +9696,7 @@ function resizePromptClip(id, edge, rawFrame) {
 				job.ikState.plants.clear();
 				setIkTick((value) => value + 1);
 			}
-			setToast(isKo ? `인물 ${job.charIndex + 1} ARDY 모션 생성됨` : `ARDY motion generated for Subject ${job.charIndex + 1}`);
+			setToast(ko(`ARDY motion generated for Subject ${job.charIndex + 1}`, `인물 ${job.charIndex + 1} ARDY 모션 생성됨`, `已为人物 ${job.charIndex + 1} 生成 ARDY 动作`));
 		} catch (err) {
 			// Wave-2 gate, second line of defence. The capability preflight
 			// normally stops a line edit before it is sent, but a bridge that
@@ -9742,14 +9705,11 @@ function resizePromptClip(id, edge, rawFrame) {
 			// connected yet", not as a red generation failure the user could
 			// act on.
 			if (job.body.lineEdit && isLineEditUnsupported(err?.message)) {
-				setToast(ko(
-					"The line-editing backend is not connected yet",
-					"라인 편집 백엔드가 아직 연결 전이에요",
-				));
+				setToast(ko("The line-editing backend is not connected yet", "라인 편집 백엔드가 아직 연결 전이에요", "路径编辑后端还没连上"));
 			}
 			setArdyOutcome({
 				ok: false,
-				message: err?.name === "AbortError" ? ko("Cancelled", "취소됨") : err?.message || String(err),
+				message: err?.name === "AbortError" ? ko("Cancelled", "취소됨", "已取消") : err?.message || String(err),
 			});
 			track("motion:job_failed", {
 				backend,
@@ -9841,7 +9801,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			motionUrl: url,
 			recipe,
 			savedAt: Date.now(),
-			label: ko("Loaded", "불러옴"),
+			label: ko("Loaded", "불러옴", "已载入"),
 		}, TAKE_VERSIONS_MAX));
 	}
 	useEffect(() => {
@@ -9897,14 +9857,14 @@ function resizePromptClip(id, edge, rawFrame) {
 	 * below is rendered as a line under its entry AND as data-disabled-reason,
 	 * which is also what the CDP surface gate reads. */
 	function refineDisabledReason() {
-		if (!motion) return ko("No take yet — block a scene first", "아직 테이크가 없어요 — 먼저 장면을 만들어 주세요");
-		if (!motion.url) return ko("This take has no bridge source — generate it once before refining", "이 테이크에는 브리지 원본이 없어요 — 한 번 생성해야 다듬을 수 있어요");
+		if (!motion) return ko("No take yet — block a scene first", "아직 테이크가 없어요 — 먼저 장면을 만들어 주세요", "还没有一条 — 请先走位一个场景");
+		if (!motion.url) return ko("This take has no bridge source — generate it once before refining", "이 테이크에는 브리지 원본이 없어요 — 한 번 생성해야 다듬을 수 있어요", "这条没有桥接源 — 请先生成一次才能微调");
 		return "";
 	}
 	function sceneDisabledReason() {
-		if (bridge === null) return ko("Checking for the ARDY bridge…", "ARDY 브리지를 확인하는 중…");
-		if (!bridge.ok) return ko("The ARDY bridge is not connected — it reconnects on its own", "ARDY 브리지가 연결되지 않았어요 — 자동으로 다시 연결됩니다");
-		if (ardyRunning) return ko("A generation is already running", "이미 생성이 돌고 있어요");
+		if (bridge === null) return ko("Checking for the ARDY bridge…", "ARDY 브리지를 확인하는 중…", "正在检查 ARDY 桥接…");
+		if (!bridge.ok) return ko("The ARDY bridge is not connected — it reconnects on its own", "ARDY 브리지가 연결되지 않았어요 — 자동으로 다시 연결됩니다", "ARDY 桥接还没连上 — 会自己重连");
+		if (ardyRunning) return ko("A generation is already running", "이미 생성이 돌고 있어요", "已经在生成了");
 		// NOT a line-edit preview, deliberately. Every other reason here is a
 		// standing capability the entry should be greyed for; a draft on the
 		// viewport lasts a second and a half, and a reason line appearing and
@@ -9923,16 +9883,13 @@ function resizePromptClip(id, edge, rawFrame) {
 	}
 	/** The one sentence every take-consuming action says while a draft is up. */
 	function previewBlockingReason() {
-		return ko(
-			"A line-edit preview is on the viewport — press Generate to keep it, or undo (Ctrl/Cmd+Z) to drop it",
-			"라인 편집 미리보기가 떠 있어요 — 생성으로 확정하거나 Ctrl/Cmd+Z로 되돌린 뒤에 쓰세요",
-		);
+		return ko("A line-edit preview is on the viewport — press Generate to keep it, or undo (Ctrl/Cmd+Z) to drop it", "라인 편집 미리보기가 떠 있어요 — 생성으로 확정하거나 Ctrl/Cmd+Z로 되돌린 뒤에 쓰세요", "视口上是路径编辑预览 — 按生成保留，或撤销（Ctrl/Cmd+Z）丢掉");
 	}
 	function sceneGenerateDisabledReason() {
 		return sceneDisabledReason()
 			|| (ardyPrompt.trim() || promptClips.some((clip) => clip.text.trim())
 				? ""
-				: ko("Describe the motion first", "먼저 어떤 동작인지 적어 주세요"));
+				: ko("Describe the motion first", "먼저 어떤 동작인지 적어 주세요", "请先写一下动作"));
 	}
 	/** Taking it AGAIN needs no fresh wording: the loaded take already knows what
 	 * it was asked for, so its own prompt is the fallback (the same fallback
@@ -9942,10 +9899,10 @@ function resizePromptClip(id, edge, rawFrame) {
 	}
 	function sceneAgainDisabledReason() {
 		return sceneDisabledReason()
-			|| (motion?.url ? "" : ko("Nothing to redo yet — make a take first", "다시 뽑을 테이크가 없어요 — 먼저 한 번 만들어 주세요"))
+			|| (motion?.url ? "" : ko("Nothing to redo yet — make a take first", "다시 뽑을 테이크가 없어요 — 먼저 한 번 만들어 주세요", "还没有可重做的 — 请先做一条"))
 			|| (sceneAgainPrompt() || promptClips.some((clip) => clip.text.trim())
 				? ""
-				: ko("This take carries no prompt — add a block and describe it", "이 테이크에는 프롬프트가 없어요 — 블록을 추가하고 동작을 적어 주세요"));
+				: ko("This take carries no prompt — add a block and describe it", "이 테이크에는 프롬프트가 없어요 — 블록을 추가하고 동작을 적어 주세요", "这条没有提示词 — 请加一块并写上动作"));
 	}
 
 	/** ONE CLICK from a loaded take into drag mode. The pull itself is authored
@@ -10053,9 +10010,7 @@ function resizePromptClip(id, edge, rawFrame) {
 				// user would find a merely posed character and assume their motion
 				// was lost. Name it and offer the reload path.
 				const subject = entry.subject || entry.id;
-				setToast(isKo
-					? `저장된 모션을 다시 불러오지 못했어요 (${subject}) — 새로고침하거나 모션을 다시 생성해 주세요`
-					: `Saved motion could not be restored for ${subject} — reload or generate it again`);
+				setToast(ko(`Saved motion could not be restored for ${subject} — reload or generate it again`, `저장된 모션을 다시 불러오지 못했어요 (${subject}) — 새로고침하거나 모션을 다시 생성해 주세요`, `${subject} 的已存动作无法恢复 — 请刷新或重新生成`));
 			});
 		}
 	}
@@ -10065,14 +10020,14 @@ function resizePromptClip(id, edge, rawFrame) {
 	}
 
 	const projectStatus = projectSaveState === "saving"
-		? ko("Saving…", "저장 중…")
+		? ko("Saving…", "저장 중…", "保存中…")
 		: projectSaveState === "error"
-			? ko("Save failed", "저장 실패")
+			? ko("Save failed", "저장 실패", "保存失败")
 			: projectName === null
-				? ko("Not saved", "저장되지 않음")
+				? ko("Not saved", "저장되지 않음", "未保存")
 				: projectDirty
-					? ko("Unsaved changes", "저장되지 않은 변경사항")
-					: ko("Saved", "저장됨");
+					? ko("Unsaved changes", "저장되지 않은 변경사항", "未保存的更改")
+					: ko("Saved", "저장됨", "已保存");
 
 	return (
 		<div className={"app" + (renderActive ? "" : " render-idle")} data-workflow-mode={workflowMode} data-embed-mode={embedMode ? "playview" : undefined}>
@@ -10089,22 +10044,22 @@ function resizePromptClip(id, edge, rawFrame) {
 						aria-expanded={projectMenuOpen}
 						onClick={() => setProjectMenuOpen((open) => !open)}
 					>
-						{projectDirty && <i className="project-dirty-dot" aria-label={ko("Unsaved changes", "저장되지 않은 변경사항")} />}
-						{projectName ?? (projectStartupOpen ? ko("Choose Project", "프로젝트 선택") : ko("Untitled Project", "제목 없는 프로젝트"))}
+						{projectDirty && <i className="project-dirty-dot" aria-label={ko("Unsaved changes", "저장되지 않은 변경사항", "未保存的更改")} />}
+						{projectName ?? (projectStartupOpen ? ko("Choose Project", "프로젝트 선택", "选择项目") : ko("Untitled Project", "제목 없는 프로젝트", "未命名项目"))}
 						<span className="caret">▾</span>
 					</button>
 					{projectMenuOpen && (
 						<div className="project-menu" role="menu" onClick={() => setProjectMenuOpen(false)}>
-							<button type="button" role="menuitem" onClick={requestNewProject}>{ko("New Project", "새 프로젝트")}</button>
-							<button type="button" role="menuitem" onClick={() => { setProjectStartupOpen(false); setProjectBrowserOpen(true); }}>{ko("Open Project…", "프로젝트 열기…")}</button>
-							<button type="button" role="menuitem" onClick={() => saveProject(false)}>{ko("Save Project", "프로젝트 저장")}</button>
-							<button type="button" role="menuitem" onClick={() => saveProject(true)}>{ko("Save Project As…", "다른 이름으로 저장…")}</button>
+							<button type="button" role="menuitem" onClick={requestNewProject}>{ko("New Project", "새 프로젝트", "新建项目")}</button>
+							<button type="button" role="menuitem" onClick={() => { setProjectStartupOpen(false); setProjectBrowserOpen(true); }}>{ko("Open Project…", "프로젝트 열기…", "打开项目…")}</button>
+							<button type="button" role="menuitem" onClick={() => saveProject(false)}>{ko("Save Project", "프로젝트 저장", "保存项目")}</button>
+							<button type="button" role="menuitem" onClick={() => saveProject(true)}>{ko("Save Project As…", "다른 이름으로 저장…", "另存为…")}</button>
 						</div>
 					)}
 				</div>
 				<div className="topbar-actions">
-					<a className="topbar-action workflow-topbar-link" href="/workflow/" aria-label={ko("Open Workflow", "워크플로 열기")}>{ko("Workflow", "워크플로우")}</a>
-					<div className="project-actions" aria-label={ko("Project actions", "프로젝트 작업")}>
+					<a className="topbar-action workflow-topbar-link" href="/workflow/" aria-label={ko("Open Workflow", "워크플로 열기", "打开工作流")}>{ko("Workflow", "워크플로우", "工作流")}</a>
+					<div className="project-actions" aria-label={ko("Project actions", "프로젝트 작업", "项目操作")}>
 						<button
 							type="button"
 							className="topbar-action project-save-action"
@@ -10112,7 +10067,7 @@ function resizePromptClip(id, edge, rawFrame) {
 							disabled={projectSaveState === "saving"}
 							onClick={() => void saveProject(false)}
 						>
-							{projectSaveState === "saving" ? ko("Saving…", "저장 중…") : ko("Save", "저장")}
+							{projectSaveState === "saving" ? ko("Saving…", "저장 중…", "保存中…") : ko("Save", "저장", "保存")}
 						</button>
 						<button
 							type="button"
@@ -10120,9 +10075,9 @@ function resizePromptClip(id, edge, rawFrame) {
 							data-testid="topbar-export"
 							disabled={recState !== "recording" && !hasCameraKeys && !motion}
 							onClick={toggleShotRecording}
-							title={ko("Export the current shot as an MP4", "현재 샷을 MP4로 내보내기")}
+							title={ko("Export the current shot as an MP4", "현재 샷을 MP4로 내보내기", "把当前镜头导出为 MP4")}
 						>
-							{recState === "recording" ? ko("■ Stop", "■ 정지") : ko("Export", "내보내기")}
+							{recState === "recording" ? ko("■ Stop", "■ 정지", "■ 停止") : ko("Export", "내보내기", "导出")}
 						</button>
 						<span
 							className={"project-save-status status-" + projectSaveState}
@@ -10137,10 +10092,7 @@ function resizePromptClip(id, edge, rawFrame) {
 						type="button"
 						className="auto-color-toggle"
 						aria-pressed={autoColor}
-						title={ko(
-							"Distinct display colors per object — captures include them while on",
-							"오브젝트별 구분 색 — 켜둔 동안 캡처에도 포함됩니다",
-						)}
+						title={ko("Distinct display colors per object — captures include them while on", "오브젝트별 구분 색 — 켜둔 동안 캡처에도 포함됩니다", "每个物体用不同显示色 — 开着时截帧也会带上")}
 						 onClick={() => {
 							setAutoColor((on) => {
 								saveAutoColor(!on);
@@ -10149,11 +10101,11 @@ function resizePromptClip(id, edge, rawFrame) {
 							});
 						}}
 					>
-						{ko("Auto Color", "자동 색")}
+						{ko("Auto Color", "자동 색", "自动颜色")}
 					</button>
 					{liveWorkspaceHandle && (
 						<span className="live-workspace-handle" data-live-workspace={liveWorkspaceHandle} title={liveWorkspaceHandle}>
-							{ko("Live workspace", "라이브 작업공간")} {liveWorkspaceHandle}
+							{ko("Live workspace", "라이브 작업공간", "实时工作区")} {liveWorkspaceHandle}
 						</span>
 					)}
 					<LocaleToggle />
@@ -10163,14 +10115,14 @@ function resizePromptClip(id, edge, rawFrame) {
 
 			<div className="main" style={workspaceStyle}>
 			<div className="workspace">
-				<aside className="panel hierarchy-left" aria-label={ko("Hierarchy", "계층")}>
+				<aside className="panel hierarchy-left" aria-label={ko("Hierarchy", "계층", "层级")}>
 				{/* Project > Scene: the project is the document root, scenes live
 				    inside it — the picker sits at the top of the hierarchy column. */}
 				<div className="hierarchy-project" data-dirty={projectDirty || undefined}>
-					<span className="hierarchy-project-label">{ko("Project", "프로젝트")}</span>
-					<strong>{projectName ?? (projectStartupOpen ? ko("Choose Project", "프로젝트 선택") : ko("Untitled", "제목 없음"))}</strong>
-					{projectDirty && <i className="project-dirty-dot" aria-label={ko("Unsaved changes", "저장되지 않은 변경사항")} />}
-					<button type="button" onClick={() => { setProjectStartupOpen(false); setProjectBrowserOpen(true); }}>{ko("Projects…", "프로젝트…")}</button>
+					<span className="hierarchy-project-label">{ko("Project", "프로젝트", "项目")}</span>
+					<strong>{projectName ?? (projectStartupOpen ? ko("Choose Project", "프로젝트 선택", "选择项目") : ko("Untitled", "제목 없음", "未命名"))}</strong>
+					{projectDirty && <i className="project-dirty-dot" aria-label={ko("Unsaved changes", "저장되지 않은 변경사항", "未保存的更改")} />}
+					<button type="button" onClick={() => { setProjectStartupOpen(false); setProjectBrowserOpen(true); }}>{ko("Projects…", "프로젝트…", "项目…")}</button>
 				</div>
 				<HierarchyPanel
 					selectedId={selectedHierarchyId}
@@ -10206,16 +10158,16 @@ function resizePromptClip(id, edge, rawFrame) {
 				<div
 					className="workspace-splitter workspace-splitter-vertical"
 					role="separator"
-					aria-label={ko("Resize hierarchy panel", "계층 패널 크기 조절")}
+					aria-label={ko("Resize hierarchy panel", "계층 패널 크기 조절", "调整层级面板大小")}
 					onPointerDown={(event) => beginWorkspaceResize("hierarchy", event)}
 				/>
 				<div className="viewport" data-drop={viewportDrop.over ? "over" : undefined} {...viewportDrop.handlers}>
 				<div className="viewport-titlebar">
-				<div className="workflow-mode-switch" role="tablist" aria-label={ko("Workflow", "작업 모드")}>
+				<div className="workflow-mode-switch" role="tablist" aria-label={ko("Workflow", "작업 모드", "工作流")}>
 					{[
-						["scene", ko("Scene", "장면"), ko("Place subjects and props", "인물과 소품 배치")],
-						["camera", ko("Camera", "카메라"), ko("Frame the shot", "샷 구도 설정")],
-						["motion", ko("Motion", "모션"), ko("Edit timing and movement", "타이밍과 움직임 편집")],
+						["scene", ko("Scene", "장면", "场景"), ko("Place subjects and props", "인물과 소품 배치", "摆放人物和道具")],
+						["camera", ko("Camera", "카메라", "相机"), ko("Frame the shot", "샷 구도 설정", "定好镜头构图")],
+						["motion", ko("Motion", "모션", "动作"), ko("Edit timing and movement", "타이밍과 움직임 편집", "编辑时机和运动")],
 					].map(([id, label, hint]) => (
 						<button
 							type="button"
@@ -10230,7 +10182,7 @@ function resizePromptClip(id, edge, rawFrame) {
 						</button>
 					))}
 				</div>
-				<div className="pane-tabs" role="tablist" aria-label={ko("Center view", "가운데 보기")}>
+				<div className="pane-tabs" role="tablist" aria-label={ko("Center view", "가운데 보기", "视图居中")}>
 					<button
 						type="button"
 						role="tab"
@@ -10238,7 +10190,7 @@ function resizePromptClip(id, edge, rawFrame) {
 						className={centerTab === "scene" ? "active" : ""}
 						onClick={() => setCenterTab("scene")}
 					>
-						{ko("Scene", "장면")}
+						{ko("Scene", "장면", "场景")}
 					</button>
 					<button
 						type="button"
@@ -10247,72 +10199,72 @@ function resizePromptClip(id, edge, rawFrame) {
 						className={centerTab === "play" ? "active" : ""}
 						onClick={() => setCenterTab("play")}
 					>
-						{ko("PlayView", "재생 보기")}
+						{ko("PlayView", "재생 보기", "PlayView")}
 					</button>
 				</div>
 				{centerTab === "scene" ? (
-				<div className="editor-toolbar scene-tools" aria-label={ko("Scene tools", "장면 도구")}>
+				<div className="editor-toolbar scene-tools" aria-label={ko("Scene tools", "장면 도구", "场景工具")}>
 					{workflowMode === "motion" && (
 						<span className="workflow-toolbar-hint" role="status">
-							{ko("Motion mode · edit the timeline below", "모션 모드 · 아래 타임라인에서 편집하세요")}
+							{ko("Motion mode · edit the timeline below", "모션 모드 · 아래 타임라인에서 편집하세요", "动作模式 · 在下方时间轴编辑")}
 						</span>
 					)}
-						<span className="transform-toolbar-label workflow-scene-context">{ko("Transform", "변환")}</span>
-						<div className="tool-switch workflow-scene-context" role="group" aria-label={ko("Transform tools", "변환 도구")} data-transform-controls>
+						<span className="transform-toolbar-label workflow-scene-context">{ko("Transform", "변환", "变换")}</span>
+						<div className="tool-switch workflow-scene-context" role="group" aria-label={ko("Transform tools", "변환 도구", "变换工具")} data-transform-controls>
 							<button
 								type="button"
 								className={gizmoMode === "move" ? "active" : ""}
-								title={ko("Move tool (W)", "이동 도구 (W)")}
+								title={ko("Move tool (W)", "이동 도구 (W)", "移动工具 (W)")}
 								aria-pressed={gizmoMode === "move"}
 								onClick={() => setGizmoMode("move")}
 							>
 								<svg viewBox="0 0 16 16" aria-hidden="true" className="tool-icon"><path d="M8 1v14M1 8h14" stroke="currentColor" strokeWidth="1.4"/><path d="M8 1 6 3h4L8 1zM8 15l-2-2h4l-2 2zM1 8l2-2v4L1 8zM15 8l-2-2v4l2-2z" fill="currentColor"/></svg>
-								{ko("Move", "이동")}
+								{ko("Move", "이동", "移动")}
 							</button>
 							<button
 								type="button"
 								className={gizmoMode === "rotate" ? "active" : ""}
-								title={ko("Rotate tool (E)", "회전 도구 (E)")}
+								title={ko("Rotate tool (E)", "회전 도구 (E)", "旋转工具 (E)")}
 								aria-pressed={gizmoMode === "rotate"}
 								onClick={() => setGizmoMode("rotate")}
 							>
 								<svg viewBox="0 0 16 16" aria-hidden="true" className="tool-icon"><circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" strokeWidth="1.4"/><path d="M13.4 8l2-2v4l-2 2z" fill="currentColor" transform="rotate(45 13.4 8)"/></svg>
-								{ko("Rotate", "회전")}
+								{ko("Rotate", "회전", "旋转")}
 							</button>
 							<button
 								type="button"
 								className={gizmoMode === "scale" ? "active" : ""}
-								title={ko("Scale tool (R)", "크기 도구 (R)")}
+								title={ko("Scale tool (R)", "크기 도구 (R)", "缩放工具 (R)")}
 								aria-pressed={gizmoMode === "scale"}
 								onClick={() => setGizmoMode("scale")}
 							>
 								<svg viewBox="0 0 16 16" aria-hidden="true" className="tool-icon"><rect x="3" y="3" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.4"/><path d="M13 13h-4M13 13V9M13 13l-3.5-3.5" stroke="currentColor" strokeWidth="1.4" fill="none"/></svg>
-								{ko("Scale", "크기")}
+								{ko("Scale", "크기", "缩放")}
 							</button>
 						</div>
 						<button
 							type="button"
 							className={"snap-switch workflow-scene-context" + (snapEnabled ? " active" : "")}
-							title={ko("Grid snapping — hold Ctrl during a drag to invert", "그리드 스냅 — 드래그 중 Ctrl을 누르면 반대로 작동")}
+							title={ko("Grid snapping — hold Ctrl during a drag to invert", "그리드 스냅 — 드래그 중 Ctrl을 누르면 반대로 작동", "网格吸附 — 拖动时按住 Ctrl 可反转")}
 							aria-pressed={snapEnabled}
 							onClick={() => setSnapEnabled((v) => !v)}
 						>
-							{ko("Snap", "스냅")}
+							{ko("Snap", "스냅", "吸附")}
 						</button>
 						<button
 							type="button"
 							className={"snap-switch grid-view-switch workflow-scene-context" + (gridView ? " active" : "")}
-							title={ko("Blender-style viewport — dark void with a reference grid instead of the deck", "Blender식 뷰포트 — 데크 대신 어두운 배경과 기준 그리드")}
+							title={ko("Blender-style viewport — dark void with a reference grid instead of the deck", "Blender식 뷰포트 — 데크 대신 어두운 배경과 기준 그리드", "Blender 式视口 — 不用台面，改用深色背景和参考网格")}
 							aria-pressed={gridView}
 							onClick={() => setGridView((v) => !v)}
 						>
-							{ko("Grid", "그리드")}
+							{ko("Grid", "그리드", "网格")}
 						</button>
 						<span className="viewport-toolbar-separator settings-separator workflow-camera-context" aria-hidden="true" />
 						<label className="viewport-toolbar-field shot-field workflow-camera-context">
-							<span>{ko("Shot", "샷")}</span>
+							<span>{ko("Shot", "샷", "镜头")}</span>
 							<select
-								aria-label={ko("Shot preset", "샷 프리셋")}
+								aria-label={ko("Shot preset", "샷 프리셋", "镜头预设")}
 								value={preset}
 								onChange={(event) => applyPreset(event.target.value)}
 							>
@@ -10322,9 +10274,9 @@ function resizePromptClip(id, edge, rawFrame) {
 							</select>
 						</label>
 						<label className="viewport-toolbar-field ratio-field workflow-camera-context">
-							<span>{ko("Cam", "카메라")}</span>
+							<span>{ko("Cam", "카메라", "相机")}</span>
 							<select
-								aria-label={ko("Camera preset", "카메라 프리셋")}
+								aria-label={ko("Camera preset", "카메라 프리셋", "相机预设")}
 								value={cameraPresetId ?? ""}
 								onChange={(event) => {
 									const id = event.target.value;
@@ -10332,16 +10284,16 @@ function resizePromptClip(id, edge, rawFrame) {
 									liveHandlersRef.current?.set_camera({ preset: id });
 								}}
 							>
-								<option value="">{ko("Free", "자유")}</option>
+								<option value="">{ko("Free", "자유", "自由")}</option>
 								{Object.values(CAMERA_PRESETS).map((value) => (
 									<option key={value.id} value={value.id}>{value.label}</option>
 								))}
 							</select>
 						</label>
 						<label className="viewport-toolbar-field ratio-field workflow-camera-context">
-							<span>{ko("Ratio", "비율")}</span>
+							<span>{ko("Ratio", "비율", "比例")}</span>
 							<select
-								aria-label={ko("Output aspect ratio", "출력 화면 비율")}
+								aria-label={ko("Output aspect ratio", "출력 화면 비율", "输出画幅")}
 								value={shotAspectKey}
 								onChange={(event) => setShotAspectKey(event.target.value)}
 							>
@@ -10366,8 +10318,8 @@ function resizePromptClip(id, edge, rawFrame) {
 						<span className="viewport-toolbar-spacer workflow-camera-context" />
 						<button
 							type="button"
-							title={ko("Recenter on subject", "피사체 다시 맞추기")}
-							aria-label={ko("Recenter on subject", "피사체 다시 맞추기")}
+							title={ko("Recenter on subject", "피사체 다시 맞추기", "重新对准人物")}
+							aria-label={ko("Recenter on subject", "피사체 다시 맞추기", "重新对准人物")}
 							className="workflow-camera-context"
 							onClick={() => setNonce((n) => n + 1)}
 						>
@@ -10382,31 +10334,31 @@ function resizePromptClip(id, edge, rawFrame) {
 								else setWorkspaceLayout((current) => ({ ...current, insetCollapsed: true }));
 							}}
 						>
-							{ko("Top", "탑")} {workspaceLayout.insetCollapsed ? "▸" : "▾"}
+							{ko("Top", "탑", "顶")} {workspaceLayout.insetCollapsed ? "▸" : "▾"}
 						</button>
 					</div>
 				) : (
-					<div className="editor-toolbar play-tools" aria-label={ko("PlayView tools", "재생 보기 도구")}>
+					<div className="editor-toolbar play-tools" aria-label={ko("PlayView tools", "재생 보기 도구", "PlayView 工具")}>
 						<span className="viewport-readout">{shotOutput.label}</span>
 						<span className="viewport-readout">FOV {Math.round(fovDeg)}° · {shot.focalMm}mm</span>
 						<span className="viewport-toolbar-spacer" />
-						<button type="button" onClick={() => stepFrame(-1)} aria-label={ko("Previous frame", "이전 프레임")}>◀</button>
+						<button type="button" onClick={() => stepFrame(-1)} aria-label={ko("Previous frame", "이전 프레임", "上一帧")}>◀</button>
 						<button
 							type="button"
-							aria-label={tlPlaying ? ko("Pause playback", "재생 일시중지") : ko("Play playback", "재생 시작")}
-							title={tlPlaying ? ko("Pause playback", "재생 일시중지") : ko("Play playback", "재생 시작")}
+							aria-label={tlPlaying ? ko("Pause playback", "재생 일시중지", "暂停播放") : ko("Play playback", "재생 시작", "开始播放")}
+							title={tlPlaying ? ko("Pause playback", "재생 일시중지", "暂停播放") : ko("Play playback", "재생 시작", "开始播放")}
 							onClick={() => setTlPlaying((value) => !value)}
 						>
 							{tlPlaying ? "Ⅱ" : "▶"}
 						</button>
-						<button type="button" onClick={() => stepFrame(1)} aria-label={ko("Next frame", "다음 프레임")}>▶│</button>
+						<button type="button" onClick={() => stepFrame(1)} aria-label={ko("Next frame", "다음 프레임", "下一帧")}>▶│</button>
 						<span className="viewport-readout">1.00×</span>
 						<span className="viewport-toolbar-separator" aria-hidden="true" />
 						<button
 							type="button"
 							disabled={!shots.length}
-							aria-label={ko("Download OTIO cut list", "OTIO 컷 목록 다운로드")}
-							title={ko("Download OTIO cut list", "OTIO 컷 목록 다운로드")}
+							aria-label={ko("Download OTIO cut list", "OTIO 컷 목록 다운로드", "下载 OTIO 剪辑表")}
+							title={ko("Download OTIO cut list", "OTIO 컷 목록 다운로드", "下载 OTIO 剪辑表")}
 							onClick={downloadOtioCutList}
 						>
 							OTIO
@@ -10421,7 +10373,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								data-testid="export-menu-trigger"
 								aria-expanded={exportMenuOpen}
 								aria-haspopup="menu"
-								title={ko("Reference exports for AI video tools", "AI 영상 도구용 레퍼런스 내보내기")}
+								title={ko("Reference exports for AI video tools", "AI 영상 도구용 레퍼런스 내보내기", "导出给 AI 视频工具的参考")}
 								onClick={(event) => {
 									// The 27px title bar clips its own overflow (the scene
 									// toolbar scrolls inside it), so an absolutely positioned
@@ -10432,7 +10384,7 @@ function resizePromptClip(id, edge, rawFrame) {
 									setExportMenuOpen((open) => !open);
 								}}
 							>
-								{ko("Export", "내보내기")}
+								{ko("Export", "내보내기", "导出")}
 								<span className="caret">▾</span>
 							</button>
 							{exportMenuOpen && (
@@ -10447,30 +10399,30 @@ function resizePromptClip(id, edge, rawFrame) {
 										role="menuitem"
 										data-testid="export-keyframe-pack"
 										disabled={!shots.length || recState === "recording"}
-										title={ko("First/last frames, clip, camera and prompt as one zip — hold Shift for every shot", "첫/마지막 프레임·클립·카메라·프롬프트를 zip 하나로 — Shift를 누르면 모든 샷")}
+										title={ko("First/last frames, clip, camera and prompt as one zip — hold Shift for every shot", "첫/마지막 프레임·클립·카메라·프롬프트를 zip 하나로 — Shift를 누르면 모든 샷", "起止帧、片段、相机和提示词打成一个 zip — 按住 Shift 导出所有镜头")}
 										onClick={(event) => void exportKeyframePacks(event.shiftKey)}
 									>
-										{ko("Keyframe pack", "키프레임 팩")}
-										<small>{ko("Shift: every shot", "Shift: 모든 샷")}</small>
+										{ko("Keyframe pack", "키프레임 팩", "关键帧包")}
+										<small>{ko("Shift: every shot", "Shift: 모든 샷", "Shift：所有镜头")}</small>
 									</button>
 									<button
 										type="button"
 										role="menuitem"
 										data-testid="export-render-passes"
-										title={ko("Depth and normal conditioning plates of the current framing", "현재 프레이밍의 뎁스·노멀 컨디션 플레이트")}
+										title={ko("Depth and normal conditioning plates of the current framing", "현재 프레이밍의 뎁스·노멀 컨디션 플레이트", "当前构图的深度和法线条件板")}
 										onClick={exportRenderPasses}
 									>
-										{ko("Depth + normal passes", "뎁스 + 노멀 패스")}
+										{ko("Depth + normal passes", "뎁스 + 노멀 패스", "深度 + 法线通道")}
 									</button>
 									<button
 										type="button"
 										role="menuitem"
 										data-testid="export-storyboard"
 										disabled={!shots.length}
-										title={ko("Contact sheet of every shot with its prompt", "모든 샷과 프롬프트를 담은 콘택트 시트")}
+										title={ko("Contact sheet of every shot with its prompt", "모든 샷과 프롬프트를 담은 콘택트 시트", "每条镜头及其提示词的样片表")}
 										onClick={() => void exportStoryboard()}
 									>
-										{ko("Storyboard", "스토리보드")}
+										{ko("Storyboard", "스토리보드", "分镜")}
 									</button>
 								</div>
 							)}
@@ -10478,12 +10430,12 @@ function resizePromptClip(id, edge, rawFrame) {
 						<button
 							type="button"
 							className={recState === "recording" ? "recording" : ""}
-							aria-label={recState === "recording" ? ko("Stop recording", "녹화 중지") : ko("Record shot", "샷 녹화")}
-							title={recState === "recording" ? ko("Stop recording", "녹화 중지") : ko("Record shot", "샷 녹화")}
+							aria-label={recState === "recording" ? ko("Stop recording", "녹화 중지", "停止录制") : ko("Record shot", "샷 녹화", "录制镜头")}
+							title={recState === "recording" ? ko("Stop recording", "녹화 중지", "停止录制") : ko("Record shot", "샷 녹화", "录制镜头")}
 							disabled={recState !== "recording" && !hasCameraKeys && !motion}
 							onClick={toggleShotRecording}
 						>
-							{recState === "recording" ? ko("■ Stop", "■ 정지") : ko("● Record", "● 녹화")}
+							{recState === "recording" ? ko("■ Stop", "■ 정지", "■ 停止") : ko("● Record", "● 녹화", "● 录制")}
 						</button>
 					</div>
 				)}
@@ -10506,13 +10458,10 @@ function resizePromptClip(id, edge, rawFrame) {
 							onCreated={({ gl }) => {
 								gl.domElement.addEventListener("webglcontextlost", (event) => {
 									event.preventDefault();
-									setToast(ko(
-										"The graphics context was lost — restoring the stage. If it stays black, reload the page; your work is autosaved.",
-										"그래픽 컨텍스트가 끊겼어요 — 무대를 복구합니다. 검게 남으면 새로고침하세요. 작업은 자동 저장돼 있습니다.",
-									));
+									setToast(ko("The graphics context was lost — restoring the stage. If it stays black, reload the page; your work is autosaved.", "그래픽 컨텍스트가 끊겼어요 — 무대를 복구합니다. 검게 남으면 새로고침하세요. 작업은 자동 저장돼 있습니다.", "图形上下文丢了 — 正在恢复舞台。若一直黑屏，请刷新；内容已自动保存。"));
 								});
 								gl.domElement.addEventListener("webglcontextrestored", () => {
-									setToast(ko("Graphics restored.", "그래픽이 복구됐어요."));
+									setToast(ko("Graphics restored.", "그래픽이 복구됐어요.", "画面已恢复。"));
 								});
 							}}
 						>
@@ -10796,7 +10745,7 @@ function resizePromptClip(id, edge, rawFrame) {
 									changeSceneObject(selectedSceneObject.id, { path: { ...path, points } }, token);
 									endSceneTransaction(token, { commit: true });
 									setPathPointIndex(index + 1);
-									setToast(ko("Point added — drag it here, or lift it in the scene", "점을 추가했어요 — 여기서 끌거나 씬에서 높이를 올리세요"));
+									setToast(ko("Point added — drag it here, or lift it in the scene", "점을 추가했어요 — 여기서 끌거나 씬에서 높이를 올리세요", "加点了 — 可在这里拖，或在场景里抬高"));
 								}}
 								onObjectPathGestureStart={() => {
 									planPathTokenRef.current = beginSceneTransaction({ owner: "object-path", cancel: () => { planPathTokenRef.current = null; } });
@@ -10813,7 +10762,7 @@ function resizePromptClip(id, edge, rawFrame) {
 									changeCameraRail(simplified);
 									setRailDraw(false);
 									const curve = buildRail(simplified);
-									setToast(isKo ? `카메라 레일 완성 — ${curve ? curve.length.toFixed(1) : "?"} m, 제어점 ${simplified.length}개` : `Camera rail drawn — ${curve ? curve.length.toFixed(1) : "?"} m, ${simplified.length} control points`);
+									setToast(ko(`Camera rail drawn — ${curve ? curve.length.toFixed(1) : "?"} m, ${simplified.length} control points`, `카메라 레일 완성 — ${curve ? curve.length.toFixed(1) : "?"} m, 제어점 ${simplified.length}개`, `相机轨道已完成 — ${curve ? curve.length.toFixed(1) : "?"} m，${simplified.length} 个控制点`));
 								}}
 								onPathStroke={(stroke) => {
 									if (!selectedSceneObject) return;
@@ -10828,9 +10777,7 @@ function resizePromptClip(id, edge, rawFrame) {
 									endSceneTransaction(token, { commit: true });
 									setPathDraw(false);
 									const metrics = pathMetrics(createObjectPath({ points }));
-									setToast(isKo
-										? `이동 경로 완성 — ${metrics.length.toFixed(1)} m, 점 ${points.length}개`
-										: `Travel path drawn — ${metrics.length.toFixed(1)} m, ${points.length} points`);
+									setToast(ko(`Travel path drawn — ${metrics.length.toFixed(1)} m, ${points.length} points`, `이동 경로 완성 — ${metrics.length.toFixed(1)} m, 점 ${points.length}개`, `移动路径已完成 — ${metrics.length.toFixed(1)} m，${points.length} 个点`));
 								}}
 								onCameraChange={commitManualCameraFraming}
 							/>
@@ -11005,9 +10952,9 @@ function resizePromptClip(id, edge, rawFrame) {
 						{glContextLost && (
 							<div className="gl-lost-overlay" role="alert">
 								<div className="gl-lost-card">
-									<strong>{ko("The 3D view lost its graphics context", "3D 뷰가 그래픽 컨텍스트를 잃었어요")}</strong>
-									<p>{ko("Waiting for the browser to restore it. If this stays, reload the studio — scenes autosave.", "브라우저가 복구하기를 기다리는 중이에요. 계속 멈춰 있으면 새로고침하세요 — 장면은 자동 저장됩니다.")}</p>
-									<button type="button" onClick={() => window.location.reload()}>{ko("Reload", "새로고침")}</button>
+									<strong>{ko("The 3D view lost its graphics context", "3D 뷰가 그래픽 컨텍스트를 잃었어요", "3D 视图丢掉了图形上下文")}</strong>
+									<p>{ko("Waiting for the browser to restore it. If this stays, reload the studio — scenes autosave.", "브라우저가 복구하기를 기다리는 중이에요. 계속 멈춰 있으면 새로고침하세요 — 장면은 자동 저장됩니다.", "正在等浏览器恢复。如果一直这样，请刷新工作室 — 场景会自动保存。")}</p>
+									<button type="button" onClick={() => window.location.reload()}>{ko("Reload", "새로고침", "重新加载")}</button>
 								</div>
 							</div>
 						)}
@@ -11024,7 +10971,7 @@ function resizePromptClip(id, edge, rawFrame) {
 						>
 							<span
 								className="vp-inset-tag"
-								title={workspaceLayout.insetCollapsed ? ko("Click or ▸ to expand · drag to move", "클릭 또는 ▸로 펼치기 · 드래그로 이동") : ko("Click or ▾ to fold · drag to move", "클릭 또는 ▾로 접기 · 드래그로 이동")}
+								title={workspaceLayout.insetCollapsed ? ko("Click or ▸ to expand · drag to move", "클릭 또는 ▸로 펼치기 · 드래그로 이동", "点击或 ▸ 展开 · 拖动可移动") : ko("Click or ▾ to fold · drag to move", "클릭 또는 ▾로 접기 · 드래그로 이동", "点击或 ▾ 收起 · 拖动可移动")}
 								onPointerDown={beginInsetDrag}
 							>
 								<span
@@ -11032,8 +10979,8 @@ function resizePromptClip(id, edge, rawFrame) {
 									role="button"
 									tabIndex={-1}
 									aria-expanded={!workspaceLayout.insetCollapsed}
-									aria-label={workspaceLayout.insetCollapsed ? ko("Expand inset view", "인셋 보기 펼치기") : ko("Collapse inset view", "인셋 보기 접기")}
-									title={workspaceLayout.insetCollapsed ? ko("Expand inset view", "인셋 보기 펼치기") : ko("Collapse inset view", "인셋 보기 접기")}
+									aria-label={workspaceLayout.insetCollapsed ? ko("Expand inset view", "인셋 보기 펼치기", "展开内嵌视图") : ko("Collapse inset view", "인셋 보기 접기", "收起内嵌视图")}
+									title={workspaceLayout.insetCollapsed ? ko("Expand inset view", "인셋 보기 펼치기", "展开内嵌视图") : ko("Collapse inset view", "인셋 보기 접기", "收起内嵌视图")}
 									onPointerDown={(e) => e.stopPropagation()}
 									// Same one-fold-per-gesture rule as the tag: ignore the
 									// second click of a double-click (detail=2).
@@ -11046,7 +10993,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								>
 									{workspaceLayout.insetCollapsed ? "▸" : "▾"}
 								</span>
-								{planIsMain || ikMode ? ko("Shot view", "샷 뷰") : ko("Top-View", "탑뷰")}
+								{planIsMain || ikMode ? ko("Shot view", "샷 뷰", "镜头视图") : ko("Top-View", "탑뷰", "顶视图")}
 								{!planIsMain && !ikMode && workspaceLayout.planZoom !== 1 && !workspaceLayout.insetCollapsed && (
 									<em className="vp-inset-zoom">{workspaceLayout.planZoom.toFixed(2).replace(/\.?0+$/, "")}×</em>
 								)}
@@ -11055,7 +11002,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								<span
 									className="vp-inset-resize"
 									role="separator"
-								aria-label={ko("Resize inset view", "인셋 보기 크기 조절")}
+								aria-label={ko("Resize inset view", "인셋 보기 크기 조절", "调整内嵌视图大小")}
 									onPointerDown={beginInsetResize}
 								/>
 							)}
@@ -11070,12 +11017,12 @@ function resizePromptClip(id, edge, rawFrame) {
 							<ShotGuideOverlay mode={guideMode} aspect={shotOutput.aspect} />
 							<span className="vp-inset-tag vp-shot-preview-tag">
 								<span className="vp-rec-dot" aria-hidden="true" />
-								{ko("Shot", "샷")}
+								{ko("Shot", "샷", "镜头")}
 								<button
 									type="button"
 									className={"vp-guide-cycle" + (guideMode === "off" ? "" : " on")}
-									aria-label={ko("Cycle composition guides", "구도 가이드 전환")}
-									title={ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko) + ko(" · click to cycle", " · 클릭으로 전환")}
+									aria-label={ko("Cycle composition guides", "구도 가이드 전환", "切换构图辅助线")}
+									title={ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko, GUIDE_LABELS[guideMode].zh) + ko(" · click to cycle", " · 클릭으로 전환", " · 点击切换")}
 									onClick={() => setGuideMode((mode) => nextGuideMode(mode))}
 								>
 									<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -11086,8 +11033,8 @@ function resizePromptClip(id, edge, rawFrame) {
 								<button
 									type="button"
 									className="vp-look-through"
-									aria-label={ko("Look through the shot camera", "샷 카메라 시점으로 보기")}
-									title={ko("Fly the shot camera itself (Esc returns)", "샷 카메라를 직접 조종 (Esc로 복귀)")}
+									aria-label={ko("Look through the shot camera", "샷 카메라 시점으로 보기", "从镜头相机看")}
+									title={ko("Fly the shot camera itself (Esc returns)", "샷 카메라를 직접 조종 (Esc로 복귀)", "直接操纵镜头相机（Esc 返回）")}
 									onClick={() => setLookThroughShot(true)}
 								>
 									<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -11103,12 +11050,12 @@ function resizePromptClip(id, edge, rawFrame) {
 							<button
 								type="button"
 								className="vp-inset-tag vp-look-through-exit"
-								title={ko("Return to the editor view (Esc)", "에디터 시점으로 돌아가기 (Esc)")}
+								title={ko("Return to the editor view (Esc)", "에디터 시점으로 돌아가기 (Esc)", "回到编辑视图 (Esc)")}
 								onClick={() => setLookThroughShot(false)}
 							>
 								<span className="vp-rec-dot" aria-hidden="true" />
-								{ko("Shot camera", "샷 카메라")}
-								<span className="vp-exit-hint">{ko("Esc · exit", "Esc · 나가기")}</span>
+								{ko("Shot camera", "샷 카메라", "镜头相机")}
+								<span className="vp-exit-hint">{ko("Esc · exit", "Esc · 나가기", "Esc · 退出")}</span>
 							</button>
 						)}
 
@@ -11122,19 +11069,19 @@ function resizePromptClip(id, edge, rawFrame) {
 							<span />
 						</div>
 						<div className={"caption" + (subjectVisible ? "" : " off")} hidden={playMode || !lookThroughShot}>
-							{subjectVisible ? slateLineKo(shot) : ko("SUBJECT OUT OF FRAME", "피사체가 프레임 밖에 있어요")}
+							{subjectVisible ? slateLineKo(shot) : ko("SUBJECT OUT OF FRAME", "피사체가 프레임 밖에 있어요", "人物出画了")}
 						</div>
 
 						{playMode && !motion && (
 							<div className="playview-empty" role="status">
-								<strong>{ko("No motion yet", "아직 모션이 없어요")}</strong>
+								<strong>{ko("No motion yet", "아직 모션이 없어요", "还没有动作")}</strong>
 								{bridge?.ok ? (
-									<span>{ko("Generate motion in the Scene tab — PlayView plays the finished result.", "장면 탭에서 모션을 생성하세요. 재생 보기는 완성 결과를 보여줍니다.")}</span>
+									<span>{ko("Generate motion in the Scene tab — PlayView plays the finished result.", "장면 탭에서 모션을 생성하세요. 재생 보기는 완성 결과를 보여줍니다.", "在场景页生成动作 — PlayView 播放完成结果。")}</span>
 								) : (
 									<>
-										<span>{ko("This hosted demo loads a sample walk cycle for you — switch to the Scene tab and press play.", "이 데모는 샘플 걷기 모션을 불러왔어요 — 장면 탭에서 재생을 눌러보세요.")}</span>
+										<span>{ko("This hosted demo loads a sample walk cycle for you — switch to the Scene tab and press play.", "이 데모는 샘플 걷기 모션을 불러왔어요 — 장면 탭에서 재생을 눌러보세요.", "这个演示已经帮你载入了一段走路 — 切到场景页按播放。")}</span>
 										<button type="button" className="btn ghost" onClick={() => { setCenterTab("scene"); track("sample:played", { from: "playview_empty" }); }}>
-											{ko("▶ Watch the sample", "▶ 샘플 구경하기")}
+											{ko("▶ Watch the sample", "▶ 샘플 구경하기", "▶ 看看示例")}
 										</button>
 									</>
 								)}
@@ -11147,7 +11094,7 @@ function resizePromptClip(id, edge, rawFrame) {
 				<div
 					className="workspace-splitter workspace-splitter-vertical"
 					role="separator"
-					aria-label={ko("Resize hierarchy and inspector panel", "계층 및 속성 패널 크기 조절")}
+					aria-label={ko("Resize hierarchy and inspector panel", "계층 및 속성 패널 크기 조절", "调整层级和属性面板大小")}
 					onPointerDown={(event) => beginWorkspaceResize("sidebar", event)}
 				/>
 				<aside className="panel hierarchy-sidebar inspector-sidebar" data-inspector={selectedHierarchyId}>
@@ -11166,14 +11113,14 @@ function resizePromptClip(id, edge, rawFrame) {
 					)}
 					<section className="inspector-pane">
 					<div className="inspector-heading">
-						<strong>{ko("Inspector", "속성")}</strong>
-						<span className="inspector-heading-selection">{selectedSceneObject ? sceneObjectNameDisplayKo(selectedSceneObject.name) : HIERARCHY_INSPECTOR_TITLES[rigSelection?.token ?? selectedHierarchyId] ?? ko("Selection", "선택 항목")}</span>
+						<strong>{ko("Inspector", "속성", "属性")}</strong>
+						<span className="inspector-heading-selection">{selectedSceneObject ? sceneObjectNameDisplayKo(selectedSceneObject.name) : HIERARCHY_INSPECTOR_TITLES[rigSelection?.token ?? selectedHierarchyId] ?? ko("Selection", "선택 항목", "选中项")}</span>
 						{selectedSceneObject && (
 							<div className="inspector-actions-wrap">
 								<button
 									type="button"
 									className="inspector-actions-trigger"
-									aria-label={ko("Object actions", "오브젝트 작업")}
+									aria-label={ko("Object actions", "오브젝트 작업", "物体操作")}
 									aria-expanded={inspectorActionsOpen}
 									onClick={() => setInspectorActionsOpen((open) => !open)}
 								>
@@ -11182,10 +11129,10 @@ function resizePromptClip(id, edge, rawFrame) {
 								{inspectorActionsOpen && (
 									<div className="inspector-actions-menu" role="menu">
 										<button type="button" role="menuitem" onClick={() => { duplicateSelectedSceneObject(); setInspectorActionsOpen(false); }}>
-											{ko("Duplicate", "복제")}
+											{ko("Duplicate", "복제", "复制")}
 										</button>
 										<button type="button" role="menuitem" onClick={() => { deleteSelectedSceneObject(); setInspectorActionsOpen(false); }}>
-											{ko("Delete", "삭제")}
+											{ko("Delete", "삭제", "删除")}
 										</button>
 									</div>
 								)}
@@ -11197,10 +11144,7 @@ function resizePromptClip(id, edge, rawFrame) {
 				    showing an empty column the user has to interpret. */}
 				{!inspectorHasContent && (
 					<p className="inspector-empty" data-inspector-empty role="status">
-						{ko(
-							"Select something in the hierarchy — the scene, the camera, a character, the environment or a prop — and its settings appear here.",
-							"계층에서 항목을 고르면 — 씨, 카메라, 캐릭터, 환경, 소품 — 그 설정이 여기 나타납니다.",
-						)}
+						{ko("Select something in the hierarchy — the scene, the camera, a character, the environment or a prop — and its settings appear here.", "계층에서 항목을 고르면 — 씨, 카메라, 캐릭터, 환경, 소품 — 그 설정이 여기 나타납니다.", "在层级里选一样 — 场景、相机、人物、环境或道具 — 设置会出现在这里。")}
 					</p>
 				)}
 				{/* Shot TYPE presets live in the viewport toolbar dropdown — not
@@ -11208,76 +11152,76 @@ function resizePromptClip(id, edge, rawFrame) {
 
 					{/* Camera animation is authored against the same playhead as motion,
 					    so keep its controls beside the Motion tools as well as Shot setup. */}
-					<Foldout hidden={!advancedMode || !keyLightSelected} title={ko("Light", "조명")}>
-						<p className="hint">{ko("Drag the sun in the scene to move the light. Shadows and warmth follow it.", "씬의 해를 드래그해 조명을 옮깁니다. 그림자와 빛의 방향이 따라옵니다.")}</p>
-						<Slider label={ko("Brightness", "밝기")} min={0} max={4} step={0.05} value={keyLight.intensity} onChange={(value) => setKeyLight((current) => createKeyLight({ ...current, intensity: value }))} />
-						<Slider label={ko("Warm ↔ Cool", "따뜻함 ↔ 차가움")} min={0} max={1} step={0.05} value={keyLight.warmth ?? 0.5} onChange={(value) => setKeyLight((current) => createKeyLight({ ...current, warmth: value }))} />
+					<Foldout hidden={!advancedMode || !keyLightSelected} title={ko("Light", "조명", "灯光")}>
+						<p className="hint">{ko("Drag the sun in the scene to move the light. Shadows and warmth follow it.", "씬의 해를 드래그해 조명을 옮깁니다. 그림자와 빛의 방향이 따라옵니다.", "在场景里拖太阳来挪灯光。阴影和冷暖会跟着走。")}</p>
+						<Slider label={ko("Brightness", "밝기", "亮度")} min={0} max={4} step={0.05} value={keyLight.intensity} onChange={(value) => setKeyLight((current) => createKeyLight({ ...current, intensity: value }))} />
+						<Slider label={ko("Warm ↔ Cool", "따뜻함 ↔ 차가움", "暖 ↔ 冷")} min={0} max={1} step={0.05} value={keyLight.warmth ?? 0.5} onChange={(value) => setKeyLight((current) => createKeyLight({ ...current, warmth: value }))} />
 						<div className="readout">
-							<span title={ko("light position", "조명 위치")}>{`x ${keyLight.x.toFixed(1)}  y ${keyLight.y.toFixed(1)}  z ${keyLight.z.toFixed(1)}`}</span>
+							<span title={ko("light position", "조명 위치", "灯光位置")}>{`x ${keyLight.x.toFixed(1)}  y ${keyLight.y.toFixed(1)}  z ${keyLight.z.toFixed(1)}`}</span>
 						</div>
 						<button className="btn ghost" onClick={() => setKeyLight(createKeyLight(null))}>
-							{ko("Reset light", "조명 초기화")}
+							{ko("Reset light", "조명 초기화", "重置灯光")}
 						</button>
 					</Foldout>
-					<Foldout hidden={!isCameraSelection} title={ko("Camera", "카메라")}>
-					<Slider label={ko("Lens (FOV)", "렌즈 (FOV)")} min={14} max={90} step={1} value={fovDeg} unit="°" onChange={setFovDeg} />
+					<Foldout hidden={!isCameraSelection} title={ko("Camera", "카메라", "相机")}>
+					<Slider label={ko("Lens (FOV)", "렌즈 (FOV)", "镜头 (FOV)")} min={14} max={90} step={1} value={fovDeg} unit="°" onChange={setFovDeg} />
 						<div className="readout">
-						<span title={ko("camera to subject", "카메라와 피사체 거리")}>{shot.distance.toFixed(2)} m</span>
-						<span title={ko("nearest prime on the cropped filmback", "크롭된 필름백 기준 가장 가까운 단렌즈")}>{shot.focalMm} mm</span>
-						<span title={ko("angle relative to the subject's eyes", "피사체 눈높이 기준 각도")}>{shot.elevationDeg.toFixed(0)}°</span>
+						<span title={ko("camera to subject", "카메라와 피사체 거리", "相机到人物")}>{shot.distance.toFixed(2)} m</span>
+						<span title={ko("nearest prime on the cropped filmback", "크롭된 필름백 기준 가장 가까운 단렌즈", "裁切画幅上最近的定焦")}>{shot.focalMm} mm</span>
+						<span title={ko("angle relative to the subject's eyes", "피사체 눈높이 기준 각도", "相对人物眼睛的角度")}>{shot.elevationDeg.toFixed(0)}°</span>
 						</div>
 						<button className="btn ghost" onClick={() => setNonce((n) => n + 1)}>
-							{ko("Recenter on subject", "피사체 다시 맞추기")}
+							{ko("Recenter on subject", "피사체 다시 맞추기", "重新对准人物")}
 						</button>
 
-						<h3 className="move-head">{ko("Move keys", "움직임 키")}</h3>
+						<h3 className="move-head">{ko("Move keys", "움직임 키", "移动关键帧")}</h3>
 						<div className="move-ab">
 							<button
 								type="button"
 								className={"btn ghost" + (recState === "recording" ? " rec-live" : "")}
 								disabled={!hasCameraKeys && !motion}
-								title={ko("Play the piece in PlayView and save it as a video file — camera move and character motion, no editor chrome", "재생 보기에서 장면을 재생하고 영상 파일로 저장합니다. 카메라 움직임과 캐릭터 모션만 담고 편집 UI는 제외됩니다")}
+								title={ko("Play the piece in PlayView and save it as a video file — camera move and character motion, no editor chrome", "재생 보기에서 장면을 재생하고 영상 파일로 저장합니다. 카메라 움직임과 캐릭터 모션만 담고 편집 UI는 제외됩니다", "在 PlayView 里播放并存成视频 — 只含相机运动和人物动作，不含编辑界面")}
 								onClick={toggleShotRecording}
 							>
-								{recState === "recording" ? ko("■ Stop rec", "■ 녹화 정지") : ko("● Record", "● 녹화")}
+								{recState === "recording" ? ko("■ Stop rec", "■ 녹화 정지", "■ 停止录制") : ko("● Record", "● 녹화", "● 录制")}
 							</button>
 						</div>
 						{moveSequence ? (
-							<div className="move-slate" title={ko("derived from the keyframings, not chosen from a list", "목록에서 고른 값이 아니라 키프레임에서 계산된 움직임입니다")}>
-								{moveSequence.displaySlate} · {moveSequence.spanS}{ko("s", "초")}
+							<div className="move-slate" title={ko("derived from the keyframings, not chosen from a list", "목록에서 고른 값이 아니라 키프레임에서 계산된 움직임입니다", "由关键帧算出，不是从列表里选的")}>
+								{moveSequence.displaySlate} · {moveSequence.spanS}{ko("s", "초", "s")}
 							</div>
 						) : (
 							<div className="move-slate">
 								{cameraKeys.length === 1
-									? (isKo ? `프레임 ${cameraKeys[0].frame}부터 고정 샷 — 샷 블록 아래 빈 줄을 클릭해 움직임을 추가하세요` : `locked-off hold from frame ${cameraKeys[0].frame} — click the empty lower strip in a Shot block to add a move`)
-									: ko("click a Shot block's lower strip to key the current framing at that frame", "샷 블록 아래 빈 줄을 클릭하면 해당 프레임에 현재 프레이밍을 저장합니다")}
+									? ko(`locked-off hold from frame ${cameraKeys[0].frame} — click the empty lower strip in a Shot block to add a move`, `프레임 ${cameraKeys[0].frame}부터 고정 샷 — 샷 블록 아래 빈 줄을 클릭해 움직임을 추가하세요`, `从第 ${cameraKeys[0].frame} 帧起固定镜头 — 点击镜头块下方空行可添加运动`)
+									: ko("click a Shot block's lower strip to key the current framing at that frame", "샷 블록 아래 빈 줄을 클릭하면 해당 프레임에 현재 프레이밍을 저장합니다", "点击镜头块下方细条，把当前构图记到那一帧")}
 							</div>
 						)}
 
-						<h3 className="move-head">{ko("Follow cam", "팔로우 카메라")}</h3>
+						<h3 className="move-head">{ko("Follow cam", "팔로우 카메라", "跟随相机")}</h3>
 						<p className="camera-editor-pointer">
 							{activeShot
-								? ko(`Editing ${activeShot.name} in the timeline camera bar below.`, `아래 타임라인 카메라 바에서 ${activeShot.name}을 편집합니다.`)
-								: ko("Select a Shot block below to edit its camera.", "아래에서 샷 블록을 선택하면 카메라를 편집할 수 있습니다.")}
+								? ko(`Editing ${activeShot.name} in the timeline camera bar below.`, `아래 타임라인 카메라 바에서 ${activeShot.name}을 편집합니다.`, `正在下方时间线相机栏编辑 ${activeShot.name}。`)
+								: ko("Select a Shot block below to edit its camera.", "아래에서 샷 블록을 선택하면 카메라를 편집할 수 있습니다.", "在下方选一个镜头块来编辑相机。")}
 						</p>
 
 						{/* Which generator this cut is being made FOR. Nothing here
 						    re-times or re-crops the shot — the timeline simply warns
 						    when the cut runs past the target's clip length or leaves
 						    its delivery aspects. */}
-						<h3 className="move-head">{ko("Target model", "타깃 모델")}</h3>
+						<h3 className="move-head">{ko("Target model", "타깃 모델", "目标模型")}</h3>
 						<p className="inspector-hint">
-							{ko("The timeline flags this shot when the cut runs past the model's clip length or leaves its delivery ratios. Nothing is re-timed or re-cropped.", "컷 길이나 화면 비율이 모델 한계를 벗어나면 타임라인이 표시해줘요. 자동으로 재조정하지는 않습니다.")}
+							{ko("The timeline flags this shot when the cut runs past the model's clip length or leaves its delivery ratios. Nothing is re-timed or re-cropped.", "컷 길이나 화면 비율이 모델 한계를 벗어나면 타임라인이 표시해줘요. 자동으로 재조정하지는 않습니다.", "剪辑长度或画幅超出模型限制时，时间轴会标出来。不会自动重定时或重裁。")}
 						</p>
-						<Field label={ko("Cut for", "맞출 모델")}>
+						<Field label={ko("Cut for", "맞출 모델", "适配机型")}>
 							<select
 								data-shot-target-model
-								aria-label={ko("Target video model", "타깃 영상 모델")}
+								aria-label={ko("Target video model", "타깃 영상 모델", "目标视频模型")}
 								disabled={!activeShot}
 								value={activeShot?.targetModel ?? ""}
 								onChange={(event) => changeShotTargetModel(event.target.value)}
 							>
-								<option value="">{ko("None", "없음")}</option>
+								<option value="">{ko("None", "없음", "无")}</option>
 								{VIDEO_MODEL_PRESETS.map((entry) => (
 									<option key={entry.id} value={entry.id}>{entry.name}</option>
 								))}
@@ -11285,16 +11229,16 @@ function resizePromptClip(id, edge, rawFrame) {
 						</Field>
 					</Foldout>
 
-				<Foldout hidden={!isCharacterSelection} title={ko("Part colours", "부위 색상")}>
-					<label className="check snap-toggle"><input type="checkbox" checked={partColoursEnabled} onChange={(e) => setPartColoursEnabled(e.target.checked)} /> {ko("Render body parts by colour", "신체 부위를 색상으로 렌더링")}</label>
-					{partColoursEnabled && <div className="move-ab"><button type="button" className={"btn ghost" + (partColoursMode === "shaded" ? " primary" : "")} onClick={() => setPartColoursMode("shaded")}>{ko("Shaded", "음영")}</button><button type="button" className={"btn ghost" + (partColoursMode === "flat" ? " primary" : "")} onClick={() => setPartColoursMode("flat")}>{ko("Flat", "평면")}</button></div>}
+				<Foldout hidden={!isCharacterSelection} title={ko("Part colours", "부위 색상", "部位颜色")}>
+					<label className="check snap-toggle"><input type="checkbox" checked={partColoursEnabled} onChange={(e) => setPartColoursEnabled(e.target.checked)} /> {ko("Render body parts by colour", "신체 부위를 색상으로 렌더링", "按颜色渲染身体部位")}</label>
+					{partColoursEnabled && <div className="move-ab"><button type="button" className={"btn ghost" + (partColoursMode === "shaded" ? " primary" : "")} onClick={() => setPartColoursMode("shaded")}>{ko("Shaded", "음영", "着色")}</button><button type="button" className={"btn ghost" + (partColoursMode === "flat" ? " primary" : "")} onClick={() => setPartColoursMode("flat")}>{ko("Flat", "평면", "平面")}</button></div>}
 				</Foldout>
-				<Foldout hidden={!isCharacterSelection} title={showB ? ko("Subjects", "인물들") : ko("Subject", "인물")}>
+				<Foldout hidden={!isCharacterSelection} title={showB ? ko("Subjects", "인물들", "人物") : ko("Subject", "인물", "人物")}>
 						<div className={"subjects-row" + (showB ? "" : " single")}>
 							{characters.map((entry, index) => entry.hidden ? null : (
 								<SubjectBox
 									key={entry.id}
-									label={ko(`Subject ${index + 1}`, `인물 ${index + 1}`)}
+									label={ko(`Subject ${index + 1}`, `인물 ${index + 1}`, `人物 ${index + 1}`)}
 									value={entry}
 									onChange={(next) => updateCharacterAt(index, next)}
 									onPose={() => openStudio(entry.id)}
@@ -11311,35 +11255,35 @@ function resizePromptClip(id, edge, rawFrame) {
 						{!showB && (
 							<button type="button" className="add-subject" onClick={() => setShowB(true)}>
 								<span className="as-plus">＋</span>
-								<span>{ko("Add second subject", "두 번째 인물 추가")}</span>
+								<span>{ko("Add second subject", "두 번째 인물 추가", "添加第二个人物")}</span>
 							</button>
 						)}
 					</Foldout>
 
-				<Foldout hidden={!isCharacterSelection} title={ko("Transform", "변환")}>
+				<Foldout hidden={!isCharacterSelection} title={ko("Transform", "변환", "变换")}>
 					<p className="inspector-hint">
-						{ko("Edit the selected subject's placement, turn and size. Drag the Transform tool in the viewport for direct manipulation.", "선택한 인물의 위치·회전·크기를 편집합니다. 뷰포트의 변환 도구를 드래그해 바로 조작할 수도 있어요.")}
+						{ko("Edit the selected subject's placement, turn and size. Drag the Transform tool in the viewport for direct manipulation.", "선택한 인물의 위치·회전·크기를 편집합니다. 뷰포트의 변환 도구를 드래그해 바로 조작할 수도 있어요.", "编辑选中人物的位置、朝向和大小。也可以在视口里拖变换工具直接操作。")}
 					</p>
 					<Vector3Row
-						label={ko("Position", "위치")}
+						label={ko("Position", "위치", "位置")}
 						fields={[
 							{ axis: "X", value: activeChar.x, step: 0.05, precision: 2, scrubRange: 5, onChange: (x) => updateCharacterAt(activeCharIndex, { x }) },
 							{ axis: "Y", value: activeChar.y ?? 0, step: 0.05, precision: 2, scrubRange: 5, onChange: (y) => updateCharacterAt(activeCharIndex, { y: Math.max(0, y) }) },
 							{ axis: "Z", value: activeChar.z, step: 0.05, precision: 2, scrubRange: 5, onChange: (z) => updateCharacterAt(activeCharIndex, { z }) },
 						]}
 					/>
-					<Slider compact label={ko("Rotation", "회전")} min={-180} max={180} step={1} value={activeChar.rot ?? 0} unit="°" onChange={(rot) => updateCharacterAt(activeCharIndex, { rot })} />
-					<Slider compact label={ko("Scale", "크기")} min={0.2} max={3} step={0.05} value={activeChar.scale ?? 1} unit="×" onChange={(scale) => updateCharacterAt(activeCharIndex, { scale })} />
+					<Slider compact label={ko("Rotation", "회전", "旋转")} min={-180} max={180} step={1} value={activeChar.rot ?? 0} unit="°" onChange={(rot) => updateCharacterAt(activeCharIndex, { rot })} />
+					<Slider compact label={ko("Scale", "크기", "缩放")} min={0.2} max={3} step={0.05} value={activeChar.scale ?? 1} unit="×" onChange={(scale) => updateCharacterAt(activeCharIndex, { scale })} />
 				</Foldout>
 
 				{/* Rig and Pose are chosen once when a character is cast and then left
 				    alone, so they open on demand — Subject and Prompt are the panels
 				    you actually work in. */}
-				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} title={ko("Rig", "리그")}>
+				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} title={ko("Rig", "리그", "绑定")}>
 					{/* The rig is a property of the character, and swapping it is a
 					    look decision made while blocking — so it belongs beside the
 					    subject, not buried in the project file. */}
-					<div className="rig-picker" role="radiogroup" aria-label={ko("Character rig", "캐릭터 리그")}>
+					<div className="rig-picker" role="radiogroup" aria-label={ko("Character rig", "캐릭터 리그", "人物绑定")}>
 						{CHARACTER_MODEL_IDS.map((id) => (
 							<button
 								type="button"
@@ -11361,13 +11305,13 @@ function resizePromptClip(id, edge, rawFrame) {
 					</div>
 				</Foldout>
 
-				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} title={ko("Pose", "포즈")}>
+				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} title={ko("Pose", "포즈", "姿势")}>
 					{/* Tiles, not a dropdown: a pose read out of a photograph has no
 					    name worth reading — it is recognisable only as a shape. This
 					    is the same grid the studio shows, applied to whichever
 					    character the hierarchy has selected. */}
 					<p className="inspector-hint">
-						{isKo ? `인물 ${activeCharIndex + 1}의 자세입니다.` : `The pose on Subject ${activeCharIndex + 1}.`}
+						{ko(`The pose on Subject ${activeCharIndex + 1}.`, `인물 ${activeCharIndex + 1}의 자세입니다.`, `这是人物 ${activeCharIndex + 1} 的姿势。`)}
 					</p>
 					<PoseTileGrid
 						poses={selectablePoses}
@@ -11389,8 +11333,8 @@ function resizePromptClip(id, edge, rawFrame) {
 							updateCharacterAt(activeCharIndex, { pose });
 							setStudioPick(pose.id);
 							setToast(hadMotion
-								? ko("Cleared the current motion and applied the pose", "현재 모션을 지우고 포즈를 적용했어요")
-								: ko("Pose applied", "포즈를 적용했어요"));
+								? ko("Cleared the current motion and applied the pose", "현재 모션을 지우고 포즈를 적용했어요", "已清除当前动作并应用姿势")
+								: ko("Pose applied", "포즈를 적용했어요", "已应用姿势"));
 						}}
 						onDelete={removePose}
 						onPhoto={() => {
@@ -11409,68 +11353,62 @@ function resizePromptClip(id, edge, rawFrame) {
 						className="btn full"
 						data-save-current-pose
 						disabled={!activeRig}
-						title={ko(
-							"Save the pose the character is in right now — with a motion loaded, that is the current frame plus IK corrections",
-							"캐릭터의 지금 자세를 저장해요 — 모션이 실려 있으면 현재 프레임에 IK 보정까지 합친 자세예요",
-						)}
+						title={ko("Save the pose the character is in right now — with a motion loaded, that is the current frame plus IK corrections", "캐릭터의 지금 자세를 저장해요 — 모션이 실려 있으면 현재 프레임에 IK 보정까지 합친 자세예요", "保存人物现在的姿势 — 若已加载动作，就是当前帧加上 IK 修正")}
 						onClick={saveCurrentPose}
 					>
-						{ko("Save current pose", "지금 자세 저장")}
+						{ko("Save current pose", "지금 자세 저장", "保存当前姿势")}
 					</button>
 					{/* Identity sits beside "Pose from photo" on purpose: both take a
 					    picture of a person, but that one reads a SHAPE off it while
 					    this one keeps the picture itself as who the character is. */}
 					<ReferenceImageField
-						label={ko("Identity image", "인물 이미지")}
-						hint={ko(
-							"A character sheet or photo of this person. It travels with every framing capture so a render keeps the same face, hair and wardrobe.",
-							"이 인물의 캐릭터 시트나 사진입니다. 모든 프레이밍 캐프처에 함께 실려 얼굴·머리·의상을 유지합니다.",
-						)}
+						label={ko("Identity image", "인물 이미지", "人物图")}
+						hint={ko("A character sheet or photo of this person. It travels with every framing capture so a render keeps the same face, hair and wardrobe.", "이 인물의 캐릭터 시트나 사진입니다. 모든 프레이밍 캐프처에 함께 실려 얼굴·머리·의상을 유지합니다.", "这个人的角色图或照片。每次构图截帧都会带上，渲染才能保持同一张脸、头发和服装。")}
 						value={activeChar.identityImage ?? null}
-						alt={ko("Identity reference", "인물 참고 이미지")}
+						alt={ko("Identity reference", "인물 참고 이미지", "人物参考图")}
 						inputProps={{ "data-identity-image-input": "" }}
 						onPick={(dataUrl) => {
 							updateCharacterAt(activeCharIndex, { identityImage: dataUrl });
-							setToast(ko("Identity image set", "인물 이미지를 설정했어요"));
+							setToast(ko("Identity image set", "인물 이미지를 설정했어요", "已设定人物图"));
 						}}
 						onClear={() => updateCharacterAt(activeCharIndex, { identityImage: null })}
 					/>
 				</Foldout>
 
-				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} title={ko("Video capture", "영상 모캡")}>
+				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} title={ko("Video capture", "영상 모캡", "影像动捕")}>
 					<div className="multimodel-card">
 						<div className="multimodel-card-head">
 							<div>
-								<strong>{ko("Footage → motion", "영상 → 모션")}</strong>
-								<span>{ko("Prepare a source inside the Motion workspace.", "모션 작업공간에서 입력 영상을 준비하세요.")}</span>
+								<strong>{ko("Footage → motion", "영상 → 모션", "影像 → 动作")}</strong>
+								<span>{ko("Prepare a source inside the Motion workspace.", "모션 작업공간에서 입력 영상을 준비하세요.", "请先在动作工作区准备素材。")}</span>
 							</div>
 							<span className={"multimodel-status " + multiModelStatus}>
 								{multiModelStatus === "ready"
-									? ko("READY", "준비됨")
+									? ko("READY", "준비됨", "就绪")
 									: multiModelStatus === "error"
-										? ko("CHECK", "확인 필요")
+										? ko("CHECK", "확인 필요", "需检查")
 										: multiModelStatus === "busy"
-											? (multiModelStage === "fetching" ? ko("FETCHING", "받는 중") : ko("PROBING", "분석 중"))
-											: ko("IDLE", "대기")}
+											? (multiModelStage === "fetching" ? ko("FETCHING", "받는 중", "接收中") : ko("PROBING", "분석 중", "分析中"))
+											: ko("IDLE", "대기", "待机")}
 							</span>
 						</div>
 						<div className="multimodel-input-block">
 							<div className="multimodel-input-label">
-								<strong>{ko("Local video file", "로컬 비디오 파일")}</strong>
-								<span>{ko("Upload from this computer", "이 컴퓨터에서 업로드")}</span>
+								<strong>{ko("Local video file", "로컬 비디오 파일", "本地视频文件")}</strong>
+								<span>{ko("Upload from this computer", "이 컴퓨터에서 업로드", "从这台电脑上传")}</span>
 							</div>
 							<div className="multimodel-source-row">
 								<button type="button" className="btn ghost" onClick={() => multiModelFileRef.current?.click()}>
-									{ko("Choose video", "영상 선택")}
+									{ko("Choose video", "영상 선택", "选择视频")}
 								</button>
 								<input ref={multiModelFileRef} className="multimodel-file-input" type="file" accept="video/*" onChange={chooseMultiModelFile} />
-								<span className="multimodel-file-name">{multiModelSource?.kind === "file" ? multiModelSource.name : ko("No file selected", "파일이 선택되지 않음")}</span>
+								<span className="multimodel-file-name">{multiModelSource?.kind === "file" ? multiModelSource.name : ko("No file selected", "파일이 선택되지 않음", "还没选文件")}</span>
 							</div>
 						</div>
 						<div className="multimodel-input-block">
 							<div className="multimodel-input-label">
-								<strong>{ko("Video URL", "비디오 URL")}</strong>
-								<span>{ko("Use a hosted or local route", "호스팅 또는 로컬 경로 사용")}</span>
+								<strong>{ko("Video URL", "비디오 URL", "视频 URL")}</strong>
+								<span>{ko("Use a hosted or local route", "호스팅 또는 로컬 경로 사용", "使用托管或本地路径")}</span>
 							</div>
 							<input
 								className="multimodel-url-input"
@@ -11478,19 +11416,19 @@ function resizePromptClip(id, edge, rawFrame) {
 								value={multiModelUrl}
 								onChange={(event) => setMultiModelUrl(event.target.value)}
 								onKeyDown={(event) => { if (event.key === "Enter") useMultiModelUrl(); }}
-								placeholder={ko("https://…/boxing.mp4", "https://…/boxing.mp4")}
-								aria-label={ko("Multi-Model video URL", "멀티 모델 영상 URL")}
+								placeholder={ko("https://…/boxing.mp4", "https://…/boxing.mp4", "https://…/boxing.mp4")}
+								aria-label={ko("Multi-Model video URL", "멀티 모델 영상 URL", "多模型视频 URL")}
 								spellCheck={false}
 							/>
 							<div className="multimodel-url-actions">
 								<button type="button" className="btn ghost" onClick={pasteMultiModelUrl}>
-									{ko("Paste", "붙여넣기")}
+									{ko("Paste", "붙여넣기", "粘贴")}
 								</button>
 								<button type="button" className="btn ghost" onClick={() => setMultiModelUrl("")} disabled={!multiModelUrl}>
-									{ko("Clear", "지우기")}
+									{ko("Clear", "지우기", "清除")}
 								</button>
 								<button type="button" className="btn primary" onClick={useMultiModelUrl} disabled={!multiModelUrl.trim()}>
-									{ko("Use URL", "URL 사용")}
+									{ko("Use URL", "URL 사용", "使用 URL")}
 								</button>
 							</div>
 						</div>
@@ -11505,9 +11443,9 @@ function resizePromptClip(id, edge, rawFrame) {
 								<span>
 									{multiModelStage === "fetching"
 										? (multiModelProgress === null
-											? ko("Downloading…", "다운로드 중…")
+											? ko("Downloading…", "다운로드 중…", "下载中…")
 											: `${Math.round(multiModelProgress * 100)}%`)
-										: ko("Decoding…", "디코딩 중…")}
+										: ko("Decoding…", "디코딩 중…", "解码中…")}
 								</span>
 							</div>
 						)}
@@ -11519,9 +11457,7 @@ function resizePromptClip(id, edge, rawFrame) {
 									<strong>{multiModelSource?.name}</strong>
 									<span>{footageSummary(multiModelFootage)}</span>
 									<span className="multimodel-receipt-timeline">
-										{isKo
-											? `타임라인 0–${multiModelFootage.frames - 1} 프레임으로 맞춤`
-											: `Timeline sized to frames 0–${multiModelFootage.frames - 1}`}
+										{ko(`Timeline sized to frames 0–${multiModelFootage.frames - 1}`, `타임라인 0–${multiModelFootage.frames - 1} 프레임으로 맞춤`, `时间线已对齐到 0–${multiModelFootage.frames - 1} 帧`)}
 									</span>
 								</div>
 							</div>
@@ -11535,10 +11471,10 @@ function resizePromptClip(id, edge, rawFrame) {
 									disabled={multiModelExtract === "running"}
 								>
 									{multiModelExtract === "running"
-										? ko("Extracting…", "추출 중…")
+										? ko("Extracting…", "추출 중…", "提取中…")
 										: multiModelTake
-											? ko("Extract again", "다시 추출")
-											: ko("Extract motion", "모션 추출")}
+											? ko("Extract again", "다시 추출", "再次提取")
+											: ko("Extract motion", "모션 추출", "提取动作")}
 								</button>
 								{multiModelExtract === "running" && (
 									<div className="multimodel-progress">
@@ -11550,7 +11486,7 @@ function resizePromptClip(id, edge, rawFrame) {
 										</div>
 										<span>
 											{multiModelExtractProgress === null
-												? ko("Engine…", "엔진 준비…")
+												? ko("Engine…", "엔진 준비…", "引擎准备中…")
 												: `${Math.round(multiModelExtractProgress * 100)}%`}
 										</span>
 									</div>
@@ -11559,42 +11495,30 @@ function resizePromptClip(id, edge, rawFrame) {
 								{multiModelTake && (
 									<p className="multimodel-extract-receipt">
 										{multiModelTake.gpu
-											? (isKo
-												? `GPU 테이크 ${multiModelTake.frames}프레임 추출됨 — 타임라인에서 재생하세요`
-												: `GPU take extracted, ${multiModelTake.frames} frames — press play on the timeline`)
-											: (isKo
-												? `${multiModelTake.frames}프레임 테이크 구움 (실측 ${multiModelTake.fitted} · 유지 ${multiModelTake.held}) — 타임라인에서 재생하세요`
-												: `Baked a ${multiModelTake.frames}-frame take (${multiModelTake.fitted} measured · ${multiModelTake.held} held) — press play on the timeline`)}
+											? (ko(`GPU take extracted, ${multiModelTake.frames} frames — press play on the timeline`, `GPU 테이크 ${multiModelTake.frames}프레임 추출됨 — 타임라인에서 재생하세요`, `GPU 镜头已提取，${multiModelTake.frames} 帧 — 在时间线上播放`))
+											: (ko(`Baked a ${multiModelTake.frames}-frame take (${multiModelTake.fitted} measured · ${multiModelTake.held} held) — press play on the timeline`, `${multiModelTake.frames}프레임 테이크 구움 (실측 ${multiModelTake.fitted} · 유지 ${multiModelTake.held}) — 타임라인에서 재생하세요`, `已烘焙 ${multiModelTake.frames} 帧镜头（实测 ${multiModelTake.fitted} · 保持 ${multiModelTake.held}）— 在时间线上播放`))}
 									</p>
 								)}
-								{multiModelTake?.trajectory && <p className="multimodel-note" data-testid="trajectory-receipt">{trajectoryReceipt(multiModelTake.trajectory, isKo)}</p>}
-								{multiModelTake?.gpu && Math.abs(activeChar.y ?? 0) > .001 && <p className="multimodel-note" data-testid="trajectory-stage-offset">{isKo ? `씬 높이 ${(activeChar.y * 100).toFixed(1)}cm가 모션에 추가돼요 (Subject → Y)` : `Scene height ${(activeChar.y * 100).toFixed(1)}cm is added to the motion (Subject → Y)`}</p>}
+								{multiModelTake?.trajectory && <p className="multimodel-note" data-testid="trajectory-receipt">{trajectoryReceipt(multiModelTake.trajectory, LOCALE)}</p>}
+								{multiModelTake?.gpu && Math.abs(activeChar.y ?? 0) > .001 && <p className="multimodel-note" data-testid="trajectory-stage-offset">{ko(`Scene height ${(activeChar.y * 100).toFixed(1)}cm is added to the motion (Subject → Y)`, `씬 높이 ${(activeChar.y * 100).toFixed(1)}cm가 모션에 추가돼요 (Subject → Y)`, `场景高度 ${(activeChar.y * 100).toFixed(1)}cm 会加到动作上（Subject → Y）`)}</p>}
 								{multiModelTake?.persons > 1 && (
 									<p className="multimodel-extract-receipt">
-										{isKo
-											? `${multiModelTake.persons}명의 테이크를 각 인물 레이어에 배치했어요`
-											: `${multiModelTake.persons} performers landed on their own subject layers`}
+										{ko(`${multiModelTake.persons} performers landed on their own subject layers`, `${multiModelTake.persons}명의 테이크를 각 인물 레이어에 배치했어요`, `已把 ${multiModelTake.persons} 个表演者放到各自人物层`)}
 									</p>
 								)}
 								{multiModelExtract === "idle" && !multiModelTake && (
 									<p className="multimodel-note">
 										{bridge === null
-											? ko("Checking for the dev bridge…", "개발 브리지를 확인하는 중…")
+											? ko("Checking for the dev bridge…", "개발 브리지를 확인하는 중…", "正在检查开发桥接…")
 											: bridge.ok
-												? ko(
-													"Extraction runs on the GPU box (about a minute per 15 s of footage).",
-													"추출은 GPU 박스에서 돌아갑니다(영상 15초당 약 1분)."
-												)
-												: ko(
-													"No bridge: extraction runs in this browser (rougher). First run downloads the pose engine (~15 MB).",
-													"브리지 없음: 이 브라우저에서 추출합니다(품질 낮음). 첫 실행은 포즈 엔진(~15 MB)을 내려받습니다."
-												)}
+												? ko("Extraction runs on the GPU box (about a minute per 15 s of footage).", "추출은 GPU 박스에서 돌아갑니다(영상 15초당 약 1분).", "提取在 GPU 机器上跑（大约每 15 s 素材 1 分钟）。")
+												: ko("No bridge: extraction runs in this browser (rougher). First run downloads the pose engine (~15 MB).", "브리지 없음: 이 브라우저에서 추출합니다(품질 낮음). 첫 실행은 포즈 엔진(~15 MB)을 내려받습니다.", "没有桥接：在这个浏览器里提取（更糙）。首次会下载姿势引擎（约 15 MB）。")}
 									</p>
 								)}
 							</div>
 						)}
 						<p className="multimodel-note">
-							{ko("Locked-off footage with both performers in frame is best.", "두 사람이 함께 보이는 고정 카메라 영상이 가장 적합합니다.")}
+							{ko("Locked-off footage with both performers in frame is best.", "두 사람이 함께 보이는 고정 카메라 영상이 가장 적합합니다.", "两人同框的固定机位最好。")}
 						</p>
 					</div>
 				</Foldout>
@@ -11602,12 +11526,12 @@ function resizePromptClip(id, edge, rawFrame) {
 				    status/control card remains available to the generation pipeline but
 				    is intentionally not mounted in the inspector. Keeping this boundary
 				    avoids changing bridge behavior while removing an unused UI surface. */}
-				{false && <Foldout hidden={!isCharacterSelection} defaultOpen={false} title={ko("Motion generation (legacy)", "레거시 모션 생성")}>
+				{false && <Foldout hidden={!isCharacterSelection} defaultOpen={false} title={ko("Motion generation (legacy)", "레거시 모션 생성", "动作生成（旧版）")}>
 					{/* One compact status line: which layer is being edited and on
 					    which box — the long hint texts lived here before. */}
 					<p className="ardy-meta">
-						{isKo ? `인물 ${activeCharIndex + 1} 레이어` : `Subject ${activeCharIndex + 1} layer`}
-						{bridge?.ok ? ` · ${bridge.host ?? ko("box", "로컬")}` : ""}
+						{ko(`Subject ${activeCharIndex + 1} layer`, `인물 ${activeCharIndex + 1} 레이어`, `人物 ${activeCharIndex + 1} 层`)}
+						{bridge?.ok ? ` · ${bridge.host ?? ko("box", "로컬", "局部")}` : ""}
 					</p>
 					{/* Per-character layer status: every cast member's clip and
 					    queue position at a glance. */}
@@ -11617,20 +11541,20 @@ function resizePromptClip(id, edge, rawFrame) {
 								const job = genQueue.find((item) => item.charId === entry.id && (item.status === "queued" || item.status === "running" || item.status === "error"));
 								const clip = entry.id === activeChar.id ? motion : entry.sessionMotion;
 								const state = job?.status === "running"
-									? ko("generating…", "생성 중…")
+									? ko("generating…", "생성 중…", "生成中…")
 									: job?.status === "queued"
-										? ko("queued", "대기 중")
+										? ko("queued", "대기 중", "排队中")
 										: job?.status === "error"
-											? ko("failed", "실패")
+											? ko("failed", "실패", "失败")
 											: clip
-												? (isKo ? `${clip.frames}프레임 로드됨` : `${clip.frames} frames loaded`)
-												: ko("no motion", "모션 없음");
+												? ko(`${clip.frames} frames loaded`, `${clip.frames}프레임 로드됨`, `已加载 ${clip.frames} 帧`)
+												: ko("no motion", "모션 없음", "没有动作");
 								return (
 									<li key={entry.id} className={entry.id === activeChar.id ? "active" : ""}>
 										<span className="gen-layers-name">S{index + 1}</span>
 										<span className={`gen-layers-state ${job?.status ?? (clip ? "loaded" : "")}`}>{state}</span>
 										{job?.status === "queued" && (
-											<button type="button" title={ko("Remove from queue", "대기열에서 제거")} onClick={() => setGenQueue((queue) => queue.filter((item) => item.id !== job.id))}>✕</button>
+											<button type="button" title={ko("Remove from queue", "대기열에서 제거", "从队列移除")} onClick={() => setGenQueue((queue) => queue.filter((item) => item.id !== job.id))}>✕</button>
 										)}
 									</li>
 								);
@@ -11638,7 +11562,7 @@ function resizePromptClip(id, edge, rawFrame) {
 						</ul>
 					)}
 					{bridge === null ? (
-						<p className="ardy-hint">{ko("Checking for the dev bridge…", "개발 브리지를 확인하는 중…")}</p>
+						<p className="ardy-hint">{ko("Checking for the dev bridge…", "개발 브리지를 확인하는 중…", "正在检查开发桥接…")}</p>
 					) : bridge.ok ? (
 						<>
 							{/* Generation is authored in Prompt Blocks below: a block owns
@@ -11657,7 +11581,7 @@ function resizePromptClip(id, edge, rawFrame) {
 									disabled={promptClips.length >= 2}
 									onChange={(event) => setArdyStartFromPose(event.target.checked)}
 								/>
-								<span>{ko("Pin the current pose", "현재 포즈 고정")}</span>
+								<span>{ko("Pin the current pose", "현재 포즈 고정", "钉住当前姿势")}</span>
 							</label>
 							{ardyStartFromPose && promptClips.length < 2 && (
 								<>
@@ -11673,19 +11597,17 @@ function resizePromptClip(id, edge, rawFrame) {
 												onClick={() => setArdyPosePlacement(placement)}
 											>
 												{placement === "start"
-													? ko("First", "첫 프레임")
+													? ko("First", "첫 프레임", "首帧")
 													: placement === "middle"
-														? ko("Middle", "중간")
+														? ko("Middle", "중간", "中间")
 														: placement === "end"
-															? ko("Last", "마지막")
-															: ko("Playhead", "재생헤드")}
+															? ko("Last", "마지막", "末帧")
+															: ko("Playhead", "재생헤드", "播放头")}
 											</button>
 										))}
 									</div>
 									<p className="ardy-hint" data-pose-placement-frame>
-										{isKo
-											? `프레임 ${posePlacementFrame(ardyPosePlacement, Math.round(ardyDuration) * TIMELINE_FPS, tlFrame)}에 이 자세를 고정하고 나머지를 생성합니다.`
-											: `The pose is held at frame ${posePlacementFrame(ardyPosePlacement, Math.round(ardyDuration) * TIMELINE_FPS, tlFrame)} and the rest is generated around it.`}
+										{ko(`The pose is held at frame ${posePlacementFrame(ardyPosePlacement, Math.round(ardyDuration) * TIMELINE_FPS, tlFrame)} and the rest is generated around it.`, `프레임 ${posePlacementFrame(ardyPosePlacement, Math.round(ardyDuration) * TIMELINE_FPS, tlFrame)}에 이 자세를 고정하고 나머지를 생성합니다.`, `姿势固定在第 ${posePlacementFrame(ardyPosePlacement, Math.round(ardyDuration) * TIMELINE_FPS, tlFrame)} 帧，其余部分围绕它生成。`)}
 									</p>
 								</>
 							)}
@@ -11694,61 +11616,61 @@ function resizePromptClip(id, edge, rawFrame) {
 							    the pose checkbox (it used to gate on raw length). */}
 							{promptClips.filter((clip) => clip.text.trim()).length >= 2 && (
 								<p className="ardy-hint">
-									{ko("Prompt blocks generate from history, so they cannot also pin a pose.", "프롬프트 블록은 이전 프레임을 이어서 생성하므로 포즈 고정과 함께 쓸 수 없어요.")}
+									{ko("Prompt blocks generate from history, so they cannot also pin a pose.", "프롬프트 블록은 이전 프레임을 이어서 생성하므로 포즈 고정과 함께 쓸 수 없어요.", "提示词块会接着前面的帧生成，所以不能同时钉住姿势。")}
 								</p>
 							)}
 							{ardyRunning && (
 								<button type="button" className="btn ghost full" onClick={cancelArdy}>
-									{ko("Cancel run", "실행 취소")}
+									{ko("Cancel run", "실행 취소", "取消运行")}
 								</button>
 							)}
 							{ardyStatus && <p className="ardy-status">{ardyStatus}</p>}
 							{ardyReport && (
 								<div className="ardy-report">
 									<div className="ardy-report-grid">
-									<span>{ko("shape mean error", "형태 평균 오차")}</span>
+									<span>{ko("shape mean error", "형태 평균 오차", "形态平均误差")}</span>
 										<b>{fmtMeters(ardyReport.shape_mean_error_m)}</b>
-									<span>{ko("shape max error", "형태 최대 오차")}</span>
+									<span>{ko("shape max error", "형태 최대 오차", "形态最大误差")}</span>
 										<b>{fmtMeters(ardyReport.shape_max_error_m)}</b>
-									<span>{ko("max jump", "최대 점프")}</span>
+									<span>{ko("max jump", "최대 점프", "最大跳跃")}</span>
 										<b>{fmtMeters(ardyReport.continuity?.max_jump_m)}</b>
 									</div>
 									<p className="ardy-caveat">
-										{ko("Shape error proves joint-center placement only —", "형태 오차는 관절 중심 배치만 검증합니다 —")}{" "}
+										{ko("Shape error proves joint-center placement only —", "형태 오차는 관절 중심 배치만 검증합니다 —", "形态误差只验证关节中心位置 —")}{" "}
 										{ardyReport.surface_contact_verified
-											? ko("contact verified", "접촉 검증됨")
-											: ko("foot-to-floor contact NOT verified", "발과 바닥의 접촉은 검증되지 않음")}{" "}
-										· {ko("target_space", "대상 좌표계")} {ardyReport.target_space ?? ko("unknown", "알 수 없음")}
+											? ko("contact verified", "접촉 검증됨", "接触已验证")
+											: ko("foot-to-floor contact NOT verified", "발과 바닥의 접촉은 검증되지 않음", "脚与地面的接触尚未验证")}{" "}
+										· {ko("target_space", "대상 좌표계", "目标坐标系")} {ardyReport.target_space ?? ko("unknown", "알 수 없음", "未知")}
 									</p>
 								</div>
 							)}
 							{ardyOutcome?.ok && (
 								<>
 									<p className="ardy-outcome done">
-									{ko("Output", "출력")} <code>{ardyOutcome.output}</code> ({ardyOutcome.bytes}{ko(" bytes", "바이트")})
+									{ko("Output", "출력", "输出")} <code>{ardyOutcome.output}</code> ({ardyOutcome.bytes}{ko(" bytes", "바이트", " 字节")})
 										{ardyOutcome.motionUrl && (
 											<>
 												{" "}
-											· {ko("motion", "모션")} <code>{ardyOutcome.motionUrl}</code>
+											· {ko("motion", "모션", "动作")} <code>{ardyOutcome.motionUrl}</code>
 											</>
 										)}
 									</p>
 									{motionBusy ? (
-								<p className="ardy-hint">{ko("Decoding motion…", "모션 디코딩 중…")}</p>
+								<p className="ardy-hint">{ko("Decoding motion…", "모션 디코딩 중…", "正在解码动作…")}</p>
 									) : motion ? (
 										<p className="ardy-outcome done">
-									{isKo ? `모션 로드됨 — ${motion.frames}프레임 @ ${motion.fps} fps, 인물 ${activeCharIndex + 1}에 재생 중` : `Motion loaded — ${motion.frames} frames @ ${motion.fps} fps, playing on Subject ${activeCharIndex + 1}`}
+									{ko(`Motion loaded — ${motion.frames} frames @ ${motion.fps} fps, playing on Subject ${activeCharIndex + 1}`, `모션 로드됨 — ${motion.frames}프레임 @ ${motion.fps} fps, 인물 ${activeCharIndex + 1}에 재생 중`, `动作已加载 — ${motion.frames} 帧 @ ${motion.fps} fps，正在人物 ${activeCharIndex + 1} 上播放`)}
 										</p>
 									) : motionError ? (
 										<>
-								<p className="ardy-outcome error">{ko("Motion decode failed:", "모션 디코딩 실패:")} {motionError}</p>
+								<p className="ardy-outcome error">{ko("Motion decode failed:", "모션 디코딩 실패:", "动作解码失败：")} {motionError}</p>
 											{ardyOutcome.motionUrl && (
 												<button
 													type="button"
 													className="btn ghost full"
 													onClick={() => loadMotion(ardyOutcome.motionUrl, undefined, ardyOutcome.rotationDeg ?? charA.rot)}
 												>
-										{ko("Retry load", "다시 로드")}
+										{ko("Retry load", "다시 로드", "重新加载")}
 												</button>
 											)}
 										</>
@@ -11762,7 +11684,13 @@ function resizePromptClip(id, edge, rawFrame) {
 					) : (
 						<>
 							<p className="ardy-hint">
-								{isKo ? (
+								{isZh ? (
+									<>
+										动作生成在你自己的电脑上跑，所以这里是关着的。时间线上的片段是预先生成的示例。
+										走位、路径、相机和播放不需要桥接。要自己生成，请克隆仓库并用
+										<code>node tools/ardy/bridge.mjs</code> 启动桥接。
+									</>
+								) : isKo ? (
 									<>
 										모션 생성은 사용자의 컴퓨터에서 실행되므로 여기서는 꺼져 있어요. 타임라인의 클립은 미리 생성된 샘플입니다.
 										스테이징, 경로, 카메라, 재생은 브리지 없이도 작동합니다. 직접 생성하려면 저장소를 클론하고
@@ -11781,8 +11709,8 @@ function resizePromptClip(id, edge, rawFrame) {
 						</>
 					)}
 				</Foldout>}
-				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} openSignal={promptBlocksReveal} title={ko("Prompt Blocks", "프롬프트 블록")}>
-					<p className="inspector-hint">{ko("Blocks define what ARDY generates over each frame range. Selecting one also moves editing context to that prompt.", "블록은 각 프레임 범위에서 ARDY가 생성할 내용을 정합니다. 블록을 선택하면 편집 기준도 해당 프롬프트로 이동합니다.")}</p>
+				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} openSignal={promptBlocksReveal} title={ko("Prompt Blocks", "프롬프트 블록", "提示词块")}>
+					<p className="inspector-hint">{ko("Blocks define what ARDY generates over each frame range. Selecting one also moves editing context to that prompt.", "블록은 각 프레임 범위에서 ARDY가 생성할 내용을 정합니다. 블록을 선택하면 편집 기준도 해당 프롬프트로 이동합니다.", "块决定 ARDY 在每段帧范围内生成什么。选中一块，编辑也会切到对应提示词。")}</p>
 						<div className="inspector-list">
 							{promptClips.map((clip) => (
 								<button
@@ -11795,13 +11723,13 @@ function resizePromptClip(id, edge, rawFrame) {
 										setTlFrame(Math.min(clip.startFrame, tlFrameCount - 1));
 									}}
 								>
-								<span>{clip.text || ko("Untitled motion", "이름 없는 모션")}</span>
+								<span>{clip.text || ko("Untitled motion", "이름 없는 모션", "未命名动作")}</span>
 									<small>{clip.startFrame}–{clip.endFrame}f</small>
 								</button>
 							))}
 						</div>
 						{selectedPromptId && (
-						<Field label={ko("Selected block prompt", "선택한 블록 프롬프트")}>
+						<Field label={ko("Selected block prompt", "선택한 블록 프롬프트", "选中块的提示词")}>
 								<input
 									type="text"
 									value={promptClips.find((clip) => clip.id === selectedPromptId)?.text ?? ""}
@@ -11809,19 +11737,19 @@ function resizePromptClip(id, edge, rawFrame) {
 										changePromptClip(selectedPromptId, event.target.value);
 										setArdyPrompt(event.target.value);
 									}}
-								placeholder={ko("describe this motion block", "이 모션 블록을 설명하세요")}
+								placeholder={ko("describe this motion block", "이 모션 블록을 설명하세요", "描述这块动作")}
 								/>
 							</Field>
 						)}
 						{/* The seed belongs with the button that consumes it. Duration does
 						    not appear at all: the blocks' own frame ranges are the length. */}
-						<Field label={ko("Seed", "시드")}>
+						<Field label={ko("Seed", "시드", "种子")}>
 							<input
 								type="text"
 								inputMode="numeric"
 								value={ardySeed}
 								onChange={(e) => changeArdySeed(e.target.value)}
-								placeholder={ko("empty = random", "비우면 랜덤")}
+								placeholder={ko("empty = random", "비우면 랜덤", "留空则随机")}
 							/>
 						</Field>
 						{/* Scheduled inpainting used to live here, beside the batch button.
@@ -11835,17 +11763,14 @@ function resizePromptClip(id, edge, rawFrame) {
 						    bridge source, so the whole section is absent until there is one
 						    rather than present and inert. */}
 						{motion?.url && (
-							<Field label={ko("Line editing", "라인 편집")}>
+							<Field label={ko("Line editing", "라인 편집", "轨迹编辑")}>
 								<button
 									type="button"
 									className={"btn full" + (lineEditMode ? " primary" : "")}
-									title={ko(
-										"The joint's own path is drawn on the viewport — grab a point on it and pull, or draw a new path on empty space; the joint then follows it exactly. The view still orbits normally (Alt+drag).",
-										"관절이 지나가는 궤적이 뷰포트에 그려집니다 — 궤적 위의 점을 잡아 끌거나, 빈 곳에 새 궤적을 그리면 관절이 그 경로를 정확히 따라갑니다. 시점은 평소처럼 돌릴 수 있어요 (Alt+드래그).",
-									)}
+									title={ko("The joint's own path is drawn on the viewport — grab a point on it and pull, or draw a new path on empty space; the joint then follows it exactly. The view still orbits normally (Alt+drag).", "관절이 지나가는 궤적이 뷰포트에 그려집니다 — 궤적 위의 점을 잡아 끌거나, 빈 곳에 새 궤적을 그리면 관절이 그 경로를 정확히 따라갑니다. 시점은 평소처럼 돌릴 수 있어요 (Alt+드래그).", "视口上画着这个关节自己的路径 — 抓住点拉，或在空白处画新路径；关节会严格跟着走。视角仍可正常环绕（Alt+拖）。")}
 									onClick={toggleLineEditMode}
 								>
-									{lineEditMode ? ko("Path editing on", "궤적 편집 켜짐") : ko("Drag the path", "궤적을 잡아 끌기")}
+									{lineEditMode ? ko("Path editing on", "궤적 편집 켜짐", "轨迹编辑已开") : ko("Drag the path", "궤적을 잡아 끌기", "拖动轨迹")}
 								</button>
 								{lineEditMode && (
 									<div
@@ -11856,12 +11781,12 @@ function resizePromptClip(id, edge, rawFrame) {
 										// read the state from whichever of the two it is looking at.
 										data-line-drift={lineCurve && lineDrifted ? "true" : undefined}
 									>
-										<Field label={ko("Joint", "관절")}>
+										<Field label={ko("Joint", "관절", "关节")}>
 											<Dropdown
 												value={lineTrack}
 												options={LINE_EDIT_TRACK_OPTIONS}
 												onChange={setLineTrack}
-												ariaLabel={ko("Joint whose path is edited", "궤적을 편집할 관절")}
+												ariaLabel={ko("Joint whose path is edited", "궤적을 편집할 관절", "要编辑轨迹的关节")}
 											/>
 										</Field>
 										{/* THE GESTURE SELECTOR. Pressing on the joint is how BOTH a
@@ -11876,26 +11801,21 @@ function resizePromptClip(id, edge, rawFrame) {
 											onClick={() => setLinePinMode((on) => !on)}
 										>
 											{linePinMode
-												? ko("Pinning moments", "순간 찍는 중")
-												: ko("Pin a moment", "순간 찍기")}
+												? ko("Pinning moments", "순간 찍는 중", "正在钉住瞬间")
+												: ko("Pin a moment", "순간 찍기", "钉住一瞬")}
 										</button>
 										{linePinMode && (
 											<p className="inspector-hint">
 												{linePins.length
-													? (isKo
-														? `${linePins.length}개(최대 ${LINE_EDIT_PINS_MAX}개)를 찍었어요 — 프레임 ${linePins.map((pin) => pin.frame).join(", ")}. 사이 동작은 모델이 채웁니다`
-														: `${linePins.length} pinned (max ${LINE_EDIT_PINS_MAX}) — frames ${linePins.map((pin) => pin.frame).join(", ")}. The model fills the movement between them`)
-													: ko(
-														"Scrub to a moment, then drag the green handle to where the joint should be. The take keeps its own timing; only that instant is pinned.",
-														"원하는 순간으로 재생 위치를 옮긴 뒤, 초록 손잡이를 관절이 있어야 할 자리로 끌어 주세요. 그 순간만 고정되고 나머지 타이밍은 그대로예요.",
-													)}
+													? (ko(`${linePins.length} pinned (max ${LINE_EDIT_PINS_MAX}) — frames ${linePins.map((pin) => pin.frame).join(", ")}. The model fills the movement between them`, `${linePins.length}개(최대 ${LINE_EDIT_PINS_MAX}개)를 찍었어요 — 프레임 ${linePins.map((pin) => pin.frame).join(", ")}. 사이 동작은 모델이 채웁니다`, `已钉 ${linePins.length} 个（最多 ${LINE_EDIT_PINS_MAX}）— 第 ${linePins.map((pin) => pin.frame).join(", ")} 帧。中间动作由模型补上`))
+													: ko("Scrub to a moment, then drag the green handle to where the joint should be. The take keeps its own timing; only that instant is pinned.", "원하는 순간으로 재생 위치를 옮긴 뒤, 초록 손잡이를 관절이 있어야 할 자리로 끌어 주세요. 그 순간만 고정되고 나머지 타이밍은 그대로예요.", "拖到某一瞬间，再把绿色手柄拉到关节该在的位置。这条的时间不变，只钉住那一瞬。")}
 											</p>
 										)}
 										{/* No range picker exists elsewhere in the app that a line
 										    edit could borrow, so the whole clip is the default and
 										    these two numbers only ever NARROW it. endFrame is
 										    exclusive, like every other half-open range on this wire. */}
-										<Field label={ko("Frame range", "프레임 구간")}>
+										<Field label={ko("Frame range", "프레임 구간", "帧范围")}>
 											<div className="line-edit-range-row">
 												<input
 													type="number"
@@ -11923,7 +11843,7 @@ function resizePromptClip(id, edge, rawFrame) {
 										{/* How far a pull carries along the path, in FRAMES — the
 										    sigma of the Gaussian falloff, said in the unit the user
 										    is looking at. Narrow is a beat, wide is a whole gesture. */}
-										<Field label={ko("Influence", "영향 범위")}>
+										<Field label={ko("Influence", "영향 범위", "影响范围")}>
 											<div className="line-edit-radius-row">
 												<input
 													type="range"
@@ -11931,23 +11851,18 @@ function resizePromptClip(id, edge, rawFrame) {
 													max={DRAG_RADIUS_MAX}
 													step={1}
 													value={lineRadius}
-													aria-label={ko("How many frames a pull carries along the path", "잡아당길 때 궤적을 따라 함께 움직이는 프레임 수")}
+													aria-label={ko("How many frames a pull carries along the path", "잡아당길 때 궤적을 따라 함께 움직이는 프레임 수", "沿路径拉动时一起带走的帧数")}
 													onChange={(event) => changeLineRadius(event.target.value)}
 												/>
 												<span className="line-edit-radius-value">
-													{isKo ? `${lineRadius}프레임` : `${lineRadius} frames`}
+													{ko(`${lineRadius} frames`, `${lineRadius}프레임`, `${lineRadius} 帧`)}
 												</span>
 											</div>
 										</Field>
 										<p className="inspector-hint">
 											{lineCurveDirty
-												? (isKo
-													? `${lineEditFrom}–${lineEditTo} 프레임을 편집했어요 — ${lineCurvePointCount}개 점(최대 ${MAX_LINE_POINTS}개)을 보내고, 양 끝은 원래 궤적에서 부드럽게 이어져 이음매가 튀지 않아요. 다시 끌거나 다시 그려서 다듬을 수 있어요`
-													: `Frames ${lineEditFrom}–${lineEditTo} edited — ${lineCurvePointCount} points (max ${MAX_LINE_POINTS}); both ends ease out of the original path, so the seams do not pop. Pull it again, or draw over it, to refine`)
-												: ko(
-													"Draw along the path to reroute that section — the frames you drew over become the range, and the take's own timing is kept. Or grab a yellow dot and pull.",
-													"궤적을 따라 그리면 그 구간만 새로 지나갑니다 — 그린 만큼이 편집 구간이 되고, 원래 속도감은 그대로 유지돼요. 노란 점을 잡아 끌어도 됩니다.",
-												)}
+												? (ko(`Frames ${lineEditFrom}–${lineEditTo} edited — ${lineCurvePointCount} points (max ${MAX_LINE_POINTS}); both ends ease out of the original path, so the seams do not pop. Pull it again, or draw over it, to refine`, `${lineEditFrom}–${lineEditTo} 프레임을 편집했어요 — ${lineCurvePointCount}개 점(최대 ${MAX_LINE_POINTS}개)을 보내고, 양 끝은 원래 궤적에서 부드럽게 이어져 이음매가 튀지 않아요. 다시 끌거나 다시 그려서 다듬을 수 있어요`, `已编辑 ${lineEditFrom}–${lineEditTo} 帧 — ${lineCurvePointCount} 个点（最多 ${MAX_LINE_POINTS}）；两端从原轨迹平滑接上，接缝不会跳。可再拉或重画来精修`))
+												: ko("Draw along the path to reroute that section — the frames you drew over become the range, and the take's own timing is kept. Or grab a yellow dot and pull.", "궤적을 따라 그리면 그 구간만 새로 지나갑니다 — 그린 만큼이 편집 구간이 되고, 원래 속도감은 그대로 유지돼요. 노란 점을 잡아 끌어도 됩니다.", "沿路径重画这一段 — 画过的帧就是编辑范围，原来的时间感还在。也可以抓住黄点拉。")}
 										</p>
 										{/* The one thing users assume a modal viewport tool takes away.
 										    Said out loud, because "can I still orbit?" is the first
@@ -11964,27 +11879,17 @@ function resizePromptClip(id, edge, rawFrame) {
 										)}
 										<p className="inspector-hint">
 											{lineCurveDirty
-												? ko(
-													"You can still orbit (Alt+drag), pan and fly freely — the edit survives it. It was aimed through one lens, so while the view is elsewhere the line is drawn ghosted and a new pull waits; Generate, undo and Reset work from anywhere.",
-													"시점은 자유롭게 돌리고(Alt+드래그) 옮길 수 있어요 — 편집은 그대로 남습니다. 다만 이 궤적은 처음 시점 기준이라, 시점을 옮기면 흐리게만 보이고 새로 끌기는 잠시 멈춰요. 생성·되돌리기·원래대로는 언제든 됩니다.",
-												)
-												: ko(
-													"You can still orbit (Alt+drag), pan and fly freely; the path follows the view until you pull or draw it.",
-													"시점은 평소처럼 자유롭게 돌리고(Alt+드래그) 옮길 수 있어요. 끌거나 그리기 전까지 궤적은 시점을 따라갑니다.",
-												)}
+												? ko("You can still orbit (Alt+drag), pan and fly freely — the edit survives it. It was aimed through one lens, so while the view is elsewhere the line is drawn ghosted and a new pull waits; Generate, undo and Reset work from anywhere.", "시점은 자유롭게 돌리고(Alt+드래그) 옮길 수 있어요 — 편집은 그대로 남습니다. 다만 이 궤적은 처음 시점 기준이라, 시점을 옮기면 흐리게만 보이고 새로 끌기는 잠시 멈춰요. 생성·되돌리기·원래대로는 언제든 됩니다.", "仍可环绕（Alt+拖）、平移和飞行 — 编辑不会丢。它是对着一个镜头做的，所以换视角时线会变淡，新的拉动会等着；生成、撤销和重置在哪都能用。")
+												: ko("You can still orbit (Alt+drag), pan and fly freely; the path follows the view until you pull or draw it.", "시점은 평소처럼 자유롭게 돌리고(Alt+드래그) 옮길 수 있어요. 끌거나 그리기 전까지 궤적은 시점을 따라갑니다.", "仍可环绕（Alt+拖）、平移和飞行；在你拉或画之前，路径会跟着视角。")}
 										</p>
 										{lineEditRange && lineEditRange.endFrame - lineEditRange.startFrame < MIN_CURVE_POINTS && (
 											<p className="inspector-hint">
-												{isKo
-													? `구간이 너무 짧아요 — 양 끝 ${PINNED_CURVE_ENDS}프레임씩이 고정이라 ${MIN_CURVE_POINTS}프레임 이상이어야 잡을 점이 생겨요`
-													: `This range is too short — with ${PINNED_CURVE_ENDS} pinned frames at each end it needs at least ${MIN_CURVE_POINTS} frames before anything can be grabbed`}
+												{ko(`This range is too short — with ${PINNED_CURVE_ENDS} pinned frames at each end it needs at least ${MIN_CURVE_POINTS} frames before anything can be grabbed`, `구간이 너무 짧아요 — 양 끝 ${PINNED_CURVE_ENDS}프레임씩이 고정이라 ${MIN_CURVE_POINTS}프레임 이상이어야 잡을 점이 생겨요`, `这段太短 — 两端各钉 ${PINNED_CURVE_ENDS} 帧，至少要 ${MIN_CURVE_POINTS} 帧才有可抓的点`)}
 											</p>
 										)}
 										{lineCurveHidden > 0 && (
 											<p className="inspector-hint">
-												{isKo
-													? `${lineCurveHidden}프레임이 화면 밖이라 잡을 수 없어요 — 구간 전체가 보이도록 카메라를 잡아 주세요`
-													: `${lineCurveHidden} frame(s) are outside the frame and cannot be grabbed — frame the whole range in view`}
+												{ko(`${lineCurveHidden} frame(s) are outside the frame and cannot be grabbed — frame the whole range in view`, `${lineCurveHidden}프레임이 화면 밖이라 잡을 수 없어요 — 구간 전체가 보이도록 카메라를 잡아 주세요`, `${lineCurveHidden} 帧在画面外，抓不到 — 请把整段都框进画面`)}
 											</p>
 										)}
 										{/* ------------------------- the preview line -------------------
@@ -11995,18 +11900,15 @@ function resizePromptClip(id, edge, rawFrame) {
 										    is LOOKING at the viewport, and the answer arrives there. */}
 										{linePreviewBusy && (
 											<p className="inspector-hint line-preview-busy" aria-live="polite">
-												{ko("Previewing the pull…", "당긴 결과 미리보는 중…")}
+												{ko("Previewing the pull…", "당긴 결과 미리보는 중…", "正在预览拉动结果…")}
 											</p>
 										)}
 										{!linePreviewBusy && linePreviewUrl && (
 											<p className="inspector-hint line-preview-live">
-												{ko(
-													"The viewport is showing this edit at full quality — press Generate to keep it as the take.",
-													"뷰포트가 지금 이 편집의 최종 품질 결과예요 — 아래 생성을 누르면 테이크로 확정됩니다.",
-												)}
+												{ko("The viewport is showing this edit at full quality — press Generate to keep it as the take.", "뷰포트가 지금 이 편집의 최종 품질 결과예요 — 아래 생성을 누르면 테이크로 확정됩니다.", "视口正在以最终质量显示这次编辑 — 按生成即可定成这一条。")}
 												{linePreviewMs > 0 && (
 													<span className="line-preview-time">
-														{isKo ? ` 미리보기 ${(linePreviewMs / 1000).toFixed(1)}s` : ` preview ${(linePreviewMs / 1000).toFixed(1)}s`}
+														{ko(` preview ${(linePreviewMs / 1000).toFixed(1)}s`, ` 미리보기 ${(linePreviewMs / 1000).toFixed(1)}s`, ` 预览 ${(linePreviewMs / 1000).toFixed(1)}s`)}
 													</span>
 												)}
 											</p>
@@ -12015,7 +11917,7 @@ function resizePromptClip(id, edge, rawFrame) {
 										    the button below still runs the real thing. */}
 										{linePreviewError && (
 											<p className="inspector-hint line-preview-error">
-												{isKo ? `미리보기 실패 — ${linePreviewError} (생성은 그대로 됩니다)` : `Preview failed — ${linePreviewError} (Generate still works)`}
+												{ko(`Preview failed — ${linePreviewError} (Generate still works)`, `미리보기 실패 — ${linePreviewError} (생성은 그대로 됩니다)`, `预览失败 — ${linePreviewError}（生成仍可用）`)}
 											</p>
 										)}
 										<button
@@ -12023,26 +11925,23 @@ function resizePromptClip(id, edge, rawFrame) {
 											className="btn primary full generate"
 											disabled={!bridge?.ok || !lineCurveDirty || ardyRunning}
 											title={!bridge?.ok
-												? ko("Waiting for the ARDY bridge — it reconnects automatically", "ARDY 브리지를 기다리는 중 — 자동으로 다시 연결됩니다")
+												? ko("Waiting for the ARDY bridge — it reconnects automatically", "ARDY 브리지를 기다리는 중 — 자동으로 다시 연결됩니다", "正在等待 ARDY 桥接 — 会自动重连")
 												: !lineCurveDirty
-													? ko("Pull the path on the viewport first", "먼저 뷰포트에서 궤적을 잡아당겨 주세요")
+													? ko("Pull the path on the viewport first", "먼저 뷰포트에서 궤적을 잡아당겨 주세요", "请先在视口里拉动轨迹")
 													: ""}
 											onClick={runLineEdit}
 										>
-											{ko("Generate the line edit", "라인 편집 생성")}
+											{ko("Generate the line edit", "라인 편집 생성", "生成轨迹编辑")}
 										</button>
 										<button type="button" className="btn ghost full" disabled={!lineCurveDirty} onClick={resetLineCurve}>
-											{ko("Reset the curve", "원래대로")}
+											{ko("Reset the curve", "원래대로", "恢复原样")}
 										</button>
 										<button type="button" className="btn ghost full" onClick={exitLineEditMode}>
-											{ko("Exit line editing (Esc)", "라인 편집 끝내기 (Esc)")}
+											{ko("Exit line editing (Esc)", "라인 편집 끝내기 (Esc)", "结束轨迹编辑 (Esc)")}
 										</button>
 										{!lineEditBackend && (
 											<p className="inspector-hint line-edit-pending">
-												{ko(
-													"The line-editing backend is not connected yet — pulling and drawing work, and this keeps retrying until it answers.",
-													"라인 편집 백엔드가 아직 연결 전이에요 — 끌기와 그리기는 되고, 연결될 때까지 계속 다시 확인합니다.",
-												)}
+												{ko("The line-editing backend is not connected yet — pulling and drawing work, and this keeps retrying until it answers.", "라인 편집 백엔드가 아직 연결 전이에요 — 끌기와 그리기는 되고, 연결될 때까지 계속 다시 확인합니다.", "路径编辑后端还没连上 — 拉和画仍可用，会一直重试到它应答。")}
 											</p>
 										)}
 									</div>
@@ -12054,43 +11953,41 @@ function resizePromptClip(id, edge, rawFrame) {
 							className="btn primary full generate prompt-block-generate"
 							disabled={!bridge?.ok || !promptClips.some((clip) => clip.text.trim())}
 							title={!bridge?.ok
-								? ko("Waiting for the ARDY bridge — it reconnects automatically", "ARDY 브리지를 기다리는 중 — 자동으로 다시 연결됩니다")
+								? ko("Waiting for the ARDY bridge — it reconnects automatically", "ARDY 브리지를 기다리는 중 — 자동으로 다시 연결됩니다", "正在等待 ARDY 桥接 — 会自动重连")
 								: !promptClips.some((clip) => clip.text.trim())
-									? ko("Add a prompt block and describe its motion first", "프롬프트 블록을 추가하고 동작을 먼저 적어 주세요")
+									? ko("Add a prompt block and describe its motion first", "프롬프트 블록을 추가하고 동작을 먼저 적어 주세요", "请先加一块提示词，并写上动作")
 									: ""}
 							onClick={runAllPromptBlocks}
 						>
 							{ardyRunning || genQueue.some((job) => job.status === "queued")
-								? ko("Queue block generation", "블록 생성 대기열에 추가")
-								: isKo
-									? `${promptClips.length}개 블록 모두 생성`
-									: `Generate all ${promptClips.length} blocks`}
+								? ko("Queue block generation", "블록 생성 대기열에 추가", "加入块生成队列")
+								: ko(`Generate all ${promptClips.length} blocks`, `${promptClips.length}개 블록 모두 생성`, `生成全部 ${promptClips.length} 个块`)}
 						</button>
 						{ardyRunning && (
 							<button type="button" className="btn ghost full" onClick={cancelArdy}>
-								{ko("Cancel run", "실행 취소")}
+								{ko("Cancel run", "실행 취소", "取消运行")}
 							</button>
 						)}
-					{!bridge?.ok && <p className="ardy-hint">{ko("Start the ARDY bridge to enable generation.", "생성을 사용하려면 ARDY 브리지를 시작하세요.")}</p>}
+					{!bridge?.ok && <p className="ardy-hint">{ko("Start the ARDY bridge to enable generation.", "생성을 사용하려면 ARDY 브리지를 시작하세요.", "请先启动 ARDY 桥接才能生成。")}</p>}
 						{ardyStatus && <p className="ardy-status">{ardyStatus}</p>}
 						<button type="button" className="btn ghost full" onClick={() => addPromptClip(tlFrame)}>
-						{isKo ? `프레임 ${tlFrame}에 블록 추가` : `Add block at frame ${tlFrame}`}
+						{ko(`Add block at frame ${tlFrame}`, `프레임 ${tlFrame}에 블록 추가`, `在第 ${tlFrame} 帧添加块`)}
 						</button>
 					</Foldout>
 
-					<Foldout hidden={!advancedMode || !isRigSelection} title={ko("Rig Control", "리그 제어")}>
+					<Foldout hidden={!advancedMode || !isRigSelection} title={ko("Rig Control", "리그 제어", "绑定控制")}>
 						<p className="inspector-hint">
 							{rigSelection && rigSelection.token !== "rig"
-							? (isKo ? `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]}이 활성 제어 그룹입니다.` : `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]} is the active control group.`)
-							: ko("Choose a body group in the hierarchy, then manipulate its handle in the main view.", "계층에서 몸 그룹을 고른 뒤 메인 뷰의 핸들을 조작하세요.")}
+							? ko(`${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]} is the active control group.`, `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]}이 활성 제어 그룹입니다.`, `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]} 是当前控制组。`)
+							: ko("Choose a body group in the hierarchy, then manipulate its handle in the main view.", "계층에서 몸 그룹을 고른 뒤 메인 뷰의 핸들을 조작하세요.", "在层级里选一个身体组，再在主视图里拖它的手柄。")}
 						</p>
 						<div className="inspector-status-grid">
-						<span>{ko("Rig", "리그")}</span><b>{ikChains ? ko("Ready", "준비됨") : ko("Unavailable", "사용 불가")}</b>
-						<span>{ko("Focus", "초점")}</span><b>{ikFocus ?? ko("None", "없음")}</b>
-						<span>{ko("Foot lock", "발 고정")}</span><b>{footSnap ? ko("ON", "켜짐") : ko("OFF", "꺼짐")}</b>
+						<span>{ko("Rig", "리그", "绑定")}</span><b>{ikChains ? ko("Ready", "준비됨", "就绪") : ko("Unavailable", "사용 불가", "不可用")}</b>
+						<span>{ko("Focus", "초점", "对焦")}</span><b>{ikFocus ?? ko("None", "없음", "无")}</b>
+						<span>{ko("Foot lock", "발 고정", "锁脚")}</span><b>{footSnap ? ko("ON", "켜짐", "开") : ko("OFF", "꺼짐", "关")}</b>
 						</div>
 						<button type="button" className={"btn full" + (ikMode ? " primary" : "")} onClick={toggleIkMode} disabled={!ikChains}>
-						{ikMode ? ko("Finish rig editing", "리그 편집 끝내기") : ko("Edit rig with IK", "IK로 리그 편집")}
+						{ikMode ? ko("Finish rig editing", "리그 편집 끝내기", "结束绑定编辑") : ko("Edit rig with IK", "IK로 리그 편집", "用 IK 编辑绑定")}
 						</button>
 						{/* Self-collision cleanup. Hidden outright on a rig whose capsule
 						    proxies cannot be built: a button whose only answer is "not
@@ -12099,13 +11996,13 @@ function resizePromptClip(id, edge, rawFrame) {
 						{collisionCleanupSupported && (
 							<>
 								<button type="button" className="btn full" onClick={runFixCollisions} disabled={!ikChains}>
-								{ko("Fix body collisions (this frame)", "콜리전 수정 (이 프레임)")}
+								{ko("Fix body collisions (this frame)", "콜리전 수정 (이 프레임)", "修正身体穿透（这一帧）")}
 								</button>
 								<button type="button" className="btn full" onClick={runFixCollisionsRange} disabled={!ikChains || !motion}>
-								{ko("Fix body collisions (whole clip)", "콜리전 수정 (클립 전체)")}
+								{ko("Fix body collisions (whole clip)", "콜리전 수정 (클립 전체)", "修正身体穿透（整段）")}
 								</button>
 								<p className="inspector-hint">
-								{ko("Pushes interpenetrating body parts apart with IK and keys the fix. Whole clip walks the loaded motion and keys only the frames that changed.", "콜리전 수정은 겹쳐 들어간 신체 파츠를 IK로 밀어내고 그 결과를 키로 남깁니다. 클립 전체는 로드된 모션을 훑으며 실제로 고쳐진 프레임만 키를 찍습니다.")}
+								{ko("Pushes interpenetrating body parts apart with IK and keys the fix. Whole clip walks the loaded motion and keys only the frames that changed.", "콜리전 수정은 겹쳐 들어간 신체 파츠를 IK로 밀어내고 그 결과를 키로 남깁니다. 클립 전체는 로드된 모션을 훑으며 실제로 고쳐진 프레임만 키를 찍습니다.", "用 IK 把互相穿插的身体部位推开，并打下修正关键帧。整段会扫过已载入的动作，只在真正改过的帧打关键帧。")}
 								</p>
 							</>
 						)}
@@ -12129,7 +12026,7 @@ function resizePromptClip(id, edge, rawFrame) {
 										aria-pressed={ikEditTool === "ik"}
 										onClick={() => setIkEditTool("ik")}
 									>
-										{ko("IK 파츠 편집", "IK parts")}
+										{ko("IK 파츠 편집", "IK parts", "IK 部件编辑")}
 									</button>
 									<button
 										type="button"
@@ -12138,13 +12035,13 @@ function resizePromptClip(id, edge, rawFrame) {
 										disabled={!showTrails}
 										onClick={() => setIkEditTool("trail")}
 									>
-										{ko("궤적선 편집", "Motion trail")}
+										{ko("궤적선 편집", "Motion trail", "轨迹线编辑")}
 									</button>
 								</div>
 								<p className="inspector-hint">
 									{ikEditTool === "ik"
-										? ko("파츠를 직접 잡아 손·발·팔꿈치·무릎을 세밀하게 수정합니다. 궤적선은 안내선으로만 표시됩니다.", "Grab a body part for detailed IK editing. Trails are guides only.")
-										: ko("궤적선을 잡아 여러 프레임의 이동을 함께 수정합니다. 파츠 핸들은 잠시 잠겨 겹침을 막습니다.", "Grab a trail to edit a range of frames. IK handles are locked to avoid overlapping picks.")}
+										? ko("파츠를 직접 잡아 손·발·팔꿈치·무릎을 세밀하게 수정합니다. 궤적선은 안내선으로만 표시됩니다.", "Grab a body part for detailed IK editing. Trails are guides only.", "直接抓住部件，精细调整手、脚、肘、膝。轨迹线只作参考。")
+										: ko("궤적선을 잡아 여러 프레임의 이동을 함께 수정합니다. 파츠 핸들은 잠시 잠겨 겹침을 막습니다.", "Grab a trail to edit a range of frames. IK handles are locked to avoid overlapping picks.", "抓住轨迹线，一次改多帧的位移。部件手柄会暂时锁住，避免点重。")}
 								</p>
 								<button
 									type="button"
@@ -12155,9 +12052,9 @@ function resizePromptClip(id, edge, rawFrame) {
 										setIkEditTool("ik");
 									}}
 								>
-									{ko(`궤적선 ${showTrails ? "표시" : "숨김"}`, `Trails ${showTrails ? "on" : "off"}`)}
+									{ko(`궤적선 ${showTrails ? "표시" : "숨김"}`, `Trails ${showTrails ? "on" : "off"}`, `运动轨迹${showTrails ? "显示" : "隐藏"}`)}
 								</button>
-								<Field label={ko("Trail falloff", "궤적 영향 범위")}>
+								<Field label={ko("Trail falloff", "궤적 영향 범위", "轨迹影响范围")}>
 									<div className="trail-falloff-row">
 										<input
 											type="range"
@@ -12175,65 +12072,59 @@ function resizePromptClip(id, edge, rawFrame) {
 									className="btn primary full trail-regenerate"
 									disabled={!trailEdit || !motion?.url || !bridge?.ok || ardyRunning}
 									title={!trailEdit
-										? ko("Drag the trajectory line in the viewport first", "먼저 뷰포트에서 궤적선을 끌어 수정하세요")
+										? ko("Drag the trajectory line in the viewport first", "먼저 뷰포트에서 궤적선을 끌어 수정하세요", "请先在视口里拖轨迹线")
 										: !motion?.url
-											? ko("The take has no bridge source to regenerate from", "재생성할 브리지 원본이 없는 테이크예요")
+											? ko("The take has no bridge source to regenerate from", "재생성할 브리지 원본이 없는 테이크예요", "这条没有可用来重新生成的桥接源")
 											: ""}
 									onClick={runTrailRegeneration}
 								>
-									{ko("Regenerate from trail edit", "궤적 수정으로 재생성")}
+									{ko("Regenerate from trail edit", "궤적 수정으로 재생성", "按轨迹修改重新生成")}
 								</button>
 								<p className="inspector-hint">
-									{ko(
-										"Grab any point of the trajectory line to bend the motion; nearby frames follow within the falloff range. Confirm to regenerate that span with Kimodo — explicit IK keys stay pinned exactly.",
-										"궤적선의 아무 지점이나 잡아 끌면 영향 범위 안의 주변 프레임이 함께 따라와요. 재생성을 누르면 그 구간을 Kimodo가 다시 생성하고, 명시적으로 잡은 IK 키는 정확히 고정됩니다.",
-									)}
+									{ko("Grab any point of the trajectory line to bend the motion; nearby frames follow within the falloff range. Confirm to regenerate that span with Kimodo — explicit IK keys stay pinned exactly.", "궤적선의 아무 지점이나 잡아 끌면 영향 범위 안의 주변 프레임이 함께 따라와요. 재생성을 누르면 그 구간을 Kimodo가 다시 생성하고, 명시적으로 잡은 IK 키는 정확히 고정됩니다.", "抓住轨迹线上任意点即可弯曲动作；附近帧会在衰减范围内跟着。确认后用 Kimodo 重生成这一段 — 明确的 IK 关键帧仍精确钉住。")}
 								</p>
 							</>
 						)}
 					</Foldout>
 
-				<Foldout hidden={!advancedMode || selectedHierarchyId !== "environment"} title={ko("Environment", "환경")}>
+				<Foldout hidden={!advancedMode || selectedHierarchyId !== "environment"} title={ko("Environment", "환경", "环境")}>
 						<label className="check">
 							<input type="checkbox" checked={hasEnvSheet} onChange={(event) => setHasEnvSheet(event.target.checked)} />
-						<span>{ko("I have an environment sheet", "환경 시트가 있어요")}</span>
+						<span>{ko("I have an environment sheet", "환경 시트가 있어요", "我有环境设定图")}</span>
 						</label>
 						{!hasEnvSheet && (
-						<Field label={ko("Environment description", "환경 설명")}>
+						<Field label={ko("Environment description", "환경 설명", "环境描述")}>
 								<input type="text" value={environment} onChange={(event) => setEnvironment(event.target.value)} />
 							</Field>
 						)}
-					<Field label={ko("Look / style", "룩 / 스타일")}>
+					<Field label={ko("Look / style", "룩 / 스타일", "外观 / 风格")}>
 							<input type="text" value={style} onChange={(event) => setStyle(event.target.value)} />
 						</Field>
 						<ReferenceImageField
-							label={ko("Environment reference", "환경 참고 이미지")}
-							hint={ko(
-								"A picture of this location. It travels with every framing capture so a render takes its materials, palette and lighting from the real place.",
-								"이 장소의 사진입니다. 모든 프레이밍 캐프처에 함께 실려 재질·색감·조명을 실제 장소에서 가져옵니다.",
-							)}
+							label={ko("Environment reference", "환경 참고 이미지", "环境参考图")}
+							hint={ko("A picture of this location. It travels with every framing capture so a render takes its materials, palette and lighting from the real place.", "이 장소의 사진입니다. 모든 프레이밍 캐프처에 함께 실려 재질·색감·조명을 실제 장소에서 가져옵니다.", "这个地点的照片。每次构图截帧都会带上，渲染才能沿用真实材质、配色和光线。")}
 							value={environmentImage}
-							alt={ko("Environment reference", "환경 참고 이미지")}
+							alt={ko("Environment reference", "환경 참고 이미지", "环境参考图")}
 							inputProps={{ "data-environment-image-input": "" }}
 							onPick={(dataUrl) => {
 								setEnvironmentImage(dataUrl);
-								setToast(ko("Environment reference set", "환경 참고 이미지를 설정했어요"));
+								setToast(ko("Environment reference set", "환경 참고 이미지를 설정했어요", "已设定环境参考图"));
 							}}
 							onClear={() => setEnvironmentImage(null)}
 						/>
 					</Foldout>
 
-				<Foldout hidden={!advancedMode || selectedHierarchyId !== "props"} title={ko("Props", "소품")}>
+				<Foldout hidden={!advancedMode || selectedHierarchyId !== "props"} title={ko("Props", "소품", "道具")}>
 					<div className="props-drop" data-drop={inspectorDrop.over ? "over" : "target"} {...inspectorDrop.handlers}>
-					<p className="inspector-hint">{ko("Everything you add to the set lives here. Pick one to edit it, or click it in the shot view. Drop a picture anywhere here — or on the shot view — to stand it up as a cutout.", "세트에 추가한 모든 소품이 여기에 모입니다. 편집하려면 하나를 고르거나 샷 뷰에서 클릭하세요. 사진을 이 영역이나 샷 뷰에 끌어다 놓으면 컷아웃으로 세워집니다.")}</p>
-					<AddObjectMenu onAdd={addSceneObject} label={ko("Add object to the set", "세트에 오브젝트 추가")} />
+					<p className="inspector-hint">{ko("Everything you add to the set lives here. Pick one to edit it, or click it in the shot view. Drop a picture anywhere here — or on the shot view — to stand it up as a cutout.", "세트에 추가한 모든 소품이 여기에 모입니다. 편집하려면 하나를 고르거나 샷 뷰에서 클릭하세요. 사진을 이 영역이나 샷 뷰에 끌어다 놓으면 컷아웃으로 세워집니다.", "场地里加的东西都在这里。点一项来编辑，或在镜头视图里点它。把照片拖到这里或镜头视图，就会立成立牌。")}</p>
+					<AddObjectMenu onAdd={addSceneObject} label={ko("Add object to the set", "세트에 오브젝트 추가", "往场地添加物体")} />
 					<button
 						type="button"
 						className="btn ghost full"
 						onClick={() => cutoutInputRef.current?.click()}
-						title={ko("A photo of the real thing, standing in the set as a card", "실제 사진을 판때기로 세워 세트에 배치합니다")}
+						title={ko("A photo of the real thing, standing in the set as a card", "실제 사진을 판때기로 세워 세트에 배치합니다", "把实物照片立成卡片，摆进场地")}
 					>
-						{ko("Import image as cutout", "이미지를 컷아웃으로 가져오기")}
+						{ko("Import image as cutout", "이미지를 컷아웃으로 가져오기", "导入图片为立牌")}
 					</button>
 					<input
 						ref={cutoutInputRef}
@@ -12264,16 +12155,20 @@ function resizePromptClip(id, edge, rawFrame) {
 					</div>
 					</Foldout>
 
-				<Foldout hidden={!selectedSceneObject} title={ko("Transform", "변환")}>
+				<Foldout hidden={!selectedSceneObject} title={ko("Transform", "변환", "变换")}>
 						{selectedSceneObject && (
 							<>
 								<p className="inspector-hint">
-								{ko("Type a value and press Enter, or drag a number sideways to scrub (Shift for fine).", "값을 입력하고 Enter를 누르거나 숫자를 좌우로 끌어 조절하세요(Shift는 미세 조정).")}
+								{ko("Type a value and press Enter, or drag a number sideways to scrub (Shift for fine).", "값을 입력하고 Enter를 누르거나 숫자를 좌우로 끌어 조절하세요(Shift는 미세 조정).", "输入数值后按 Enter，或左右拖数字调节（Shift 微调）。")}
 								</p>
 								<label className="check snap-toggle">
 									<input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} />
 								<span>
-									{isKo ? (
+									{isZh ? (
+										<>
+											网格吸附 — 按住 <kbd>Ctrl</kbd> 会反向
+										</>
+									) : isKo ? (
 										<>
 											그리드 스냅 — <kbd>Ctrl</kbd>을 누르면 반대로 작동
 										</>
@@ -12284,7 +12179,7 @@ function resizePromptClip(id, edge, rawFrame) {
 									)}
 								</span>
 								</label>
-						<Field label={ko("Name", "이름")}>
+						<Field label={ko("Name", "이름", "名称")}>
 									<input
 										type="text"
 								value={sceneObjectNameDisplayKo(selectedSceneObject.name)}
@@ -12296,21 +12191,21 @@ function resizePromptClip(id, edge, rawFrame) {
 								    riding and the way off it. Detaching here is the Props drop,
 								    numbers and all. */}
 								{selectedSceneObject.attach ? (
-									<Field label={ko("Attached to", "부착 대상")}>
+									<Field label={ko("Attached to", "부착 대상", "附着到")}>
 										<div className="attach-target">
 											<span>{attachTargetLabel(selectedSceneObject.attach)}</span>
 											<button
 												type="button"
 												className="btn ghost"
 												onClick={() => hierarchyReparent.onDrop(`object:${selectedSceneObject.id}`, "props")}
-												title={ko("Put it back in the set, where it is now", "지금 있는 자리에 그대로 세트로 되돌립니다")}
+												title={ko("Put it back in the set, where it is now", "지금 있는 자리에 그대로 세트로 되돌립니다", "按现在的位置放回场地")}
 											>
-												{ko("Detach", "분리")}
+												{ko("Detach", "분리", "分离")}
 											</button>
 										</div>
 									</Field>
 								) : (
-								<Field label={ko("Parent", "상위 그룹")}>
+								<Field label={ko("Parent", "상위 그룹", "父级")}>
 									<select
 										value={selectedSceneObject.parent ?? ""}
 										onChange={(event) => {
@@ -12323,7 +12218,7 @@ function resizePromptClip(id, edge, rawFrame) {
 											}
 										}}
 									>
-										<option value="">{ko("(none)", "(없음)")}</option>
+										<option value="">{ko("(none)", "(없음)", "(无)")}</option>
 										{sceneObjects
 											.filter((object) => object.id !== selectedSceneObject.id)
 											.map((object) => (
@@ -12333,7 +12228,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								</Field>
 								)}
 								<Vector3Row
-							label={ko("Position", "위치")}
+							label={ko("Position", "위치", "位置")}
 									fields={[
 										{ axis: "X", value: selectedSceneObject.x, step: 0.05, precision: 2, scrubRange: 5, onChange: (x, token) => changeSceneObject(selectedSceneObject.id, { x }, token), onScrubStart: beginSceneTransaction, onScrubEnd: endSceneTransaction },
 										{ axis: "Y", value: selectedSceneObject.y ?? 0, step: 0.05, precision: 2, scrubRange: 5, onChange: (y, token) => changeSceneObject(selectedSceneObject.id, { y }, token), onScrubStart: beginSceneTransaction, onScrubEnd: endSceneTransaction },
@@ -12341,7 +12236,7 @@ function resizePromptClip(id, edge, rawFrame) {
 									]}
 								/>
 								<Vector3Row
-							label={ko("Rotation", "회전")}
+							label={ko("Rotation", "회전", "旋转")}
 									fields={[
 										{ axis: "X", value: selectedSceneObject.rotX ?? 0, step: 1, precision: 1, scrubRange: 180, onChange: (rotX, token) => changeSceneObject(selectedSceneObject.id, { rotX }, token), onScrubStart: beginSceneTransaction, onScrubEnd: endSceneTransaction },
 										{ axis: "Y", value: selectedSceneObject.rot, step: 1, precision: 1, scrubRange: 180, onChange: (rot, token) => changeSceneObject(selectedSceneObject.id, { rot }, token), onScrubStart: beginSceneTransaction, onScrubEnd: endSceneTransaction },
@@ -12349,7 +12244,7 @@ function resizePromptClip(id, edge, rawFrame) {
 									]}
 								/>
 								<Vector3Row
-							label={ko("Scale", "크기")}
+							label={ko("Scale", "크기", "缩放")}
 									fields={[
 										{ axis: "X", value: selectedSceneObject.scaleX ?? 1, step: 0.05, precision: 2, scrubRange: 4, onChange: (scaleX, token) => changeSceneObject(selectedSceneObject.id, { scaleX }, token), onScrubStart: beginSceneTransaction, onScrubEnd: endSceneTransaction },
 										{ axis: "Y", value: selectedSceneObject.scaleY ?? 1, step: 0.05, precision: 2, scrubRange: 4, onChange: (scaleY, token) => changeSceneObject(selectedSceneObject.id, { scaleY }, token), onScrubStart: beginSceneTransaction, onScrubEnd: endSceneTransaction },
@@ -12358,7 +12253,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								/>
 								{selectedSceneObject.renderer === CUTOUT_KIND && (
 									<>
-										<Field label={ko("Card height (m)", "판 높이 (m)")}>
+										<Field label={ko("Card height (m)", "판 높이 (m)", "立牌高度 (m)")}>
 											<input
 												type="number"
 												data-field="cutout-height"
@@ -12368,7 +12263,7 @@ function resizePromptClip(id, edge, rawFrame) {
 												onChange={(event) => changeSceneObject(selectedSceneObject.id, { height: Number(event.target.value) })}
 											/>
 										</Field>
-										<Field label={ko("Card width (m)", "판 너비 (m)")}>
+										<Field label={ko("Card width (m)", "판 너비 (m)", "立牌宽度 (m)")}>
 											<input
 												type="number"
 												data-field="cutout-width"
@@ -12379,9 +12274,7 @@ function resizePromptClip(id, edge, rawFrame) {
 											/>
 										</Field>
 										<p className="inspector-hint">
-											{isKo
-												? `높이를 바꾸면 너비는 사진 비율(${(selectedSceneObject.aspect ?? 1).toFixed(2)})을 따라갑니다. 너비만 따로 정하거나 기즈모의 가로축을 끌면 사진이 늘어납니다. 사진 속에서 크기를 알 수 있는 것(문 2 m, 사람 1.8 m)에 맞추세요.`
-												: `Width follows the picture's aspect (${(selectedSceneObject.aspect ?? 1).toFixed(2)}) as you change the height. Set it on its own — or drag the gizmo's X axis — to stretch the picture. Measure against something you know: a door is 2 m, a person 1.8 m.`}
+											{ko(`Width follows the picture's aspect (${(selectedSceneObject.aspect ?? 1).toFixed(2)}) as you change the height. Set it on its own — or drag the gizmo's X axis — to stretch the picture. Measure against something you know: a door is 2 m, a person 1.8 m.`, `높이를 바꾸면 너비는 사진 비율(${(selectedSceneObject.aspect ?? 1).toFixed(2)})을 따라갑니다. 너비만 따로 정하거나 기즈모의 가로축을 끌면 사진이 늘어납니다. 사진 속에서 크기를 알 수 있는 것(문 2 m, 사람 1.8 m)에 맞추세요.`, `改高度时，宽度会跟照片比例（${(selectedSceneObject.aspect ?? 1).toFixed(2)}）。单独改宽度，或拖操纵器横轴，就会拉伸照片。对照你知道的尺寸：门约 2 m，人约 1.8 m。`)}
 										</p>
 										{Math.abs((selectedSceneObject.stretch ?? 1) - 1) > 0.005 && (
 											<p className="inspector-hint">
@@ -12391,19 +12284,14 @@ function resizePromptClip(id, edge, rawFrame) {
 													data-field="cutout-unstretch"
 													onClick={() => changeSceneObject(selectedSceneObject.id, { stretch: 1 })}
 												>
-													{isKo
-														? `사진 비율로 되돌리기 (지금 ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%)`
-														: `Back to the picture's proportions (now ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%)`}
+													{ko(`Back to the picture's proportions (now ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%)`, `사진 비율로 되돌리기 (지금 ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%)`, `恢复照片比例（现在 ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%）`)}
 												</button>
 											</p>
 										)}
 										<div className="matte-editor">
 											{!!selectedSceneObject.matteAssetId && (
 												<p className="inspector-hint matte-state">
-													{ko(
-														"This card's background is removed. You are editing the original photograph — apply again to change what goes.",
-														"이 카드는 배경이 지워진 상태입니다. 지금 보이는 것은 원본 사진이며, 다시 적용하면 지워지는 범위가 바뀝니다.",
-													)}
+													{ko("This card's background is removed. You are editing the original photograph — apply again to change what goes.", "이 카드는 배경이 지워진 상태입니다. 지금 보이는 것은 원본 사진이며, 다시 적용하면 지워지는 범위가 바뀝니다.", "这张卡的背景已去掉。你在编辑原图 — 再应用一次即可改掉要去掉的部分。")}
 												</p>
 											)}
 											<canvas
@@ -12414,17 +12302,12 @@ function resizePromptClip(id, edge, rawFrame) {
 												// key meaning two different undos in two different panels is
 												// worse than a key that means one thing everywhere.
 												tabIndex={0}
-												aria-label={ko("Background editor — drag over the background to cut it out", "배경 편집기 — 배경 위를 드래그하면 그 영역이 잘려 나갑니다")}
+												aria-label={ko("Background editor — drag over the background to cut it out", "배경 편집기 — 배경 위를 드래그하면 그 영역이 잘려 나갑니다", "背景编辑器 — 在背景上拖动即可抠掉那一块")}
 											/>
 											<p className="inspector-hint">
 												{matteStats.painted
-													? isKo
-														? `사진의 ${Math.round(matteStats.coverage * 100)}%가 선택됨 — 보라색이 지워집니다.`
-														: `${Math.round(matteStats.coverage * 100)}% of the picture marked — purple is what goes.`
-													: ko(
-															"Drag over the background — the cut grows out from wherever the brush touches.",
-															"배경 위를 드래그하세요 — 브러시가 닿은 곳에서 같은 배경으로 번져 나가며 잘립니다.",
-														)}
+													? ko(`${Math.round(matteStats.coverage * 100)}% of the picture marked — purple is what goes.`, `사진의 ${Math.round(matteStats.coverage * 100)}%가 선택됨 — 보라색이 지워집니다.`, `照片的 ${Math.round(matteStats.coverage * 100)}% 已标记 — 紫色部分会被去掉。`)
+													: ko("Drag over the background — the cut grows out from wherever the brush touches.", "배경 위를 드래그하세요 — 브러시가 닿은 곳에서 같은 배경으로 번져 나가며 잘립니다.", "在背景上拖 — 笔刷碰到的地方会向外扩开抠掉。")}
 											</p>
 										</div>
 										{/* Two hands: what the brush does on the left, what to do
@@ -12441,7 +12324,7 @@ function resizePromptClip(id, edge, rawFrame) {
 														matteEditorRef.current?.setMode("paint");
 													}}
 												>
-													{ko("Cut out", "누끼 따기")}
+													{ko("Cut out", "누끼 따기", "抠图")}
 												</button>
 												<button
 													type="button"
@@ -12451,7 +12334,7 @@ function resizePromptClip(id, edge, rawFrame) {
 														matteEditorRef.current?.setMode("erase");
 													}}
 												>
-													{ko("Bring back", "되살리기")}
+													{ko("Bring back", "되살리기", "恢复")}
 												</button>
 											</div>
 											{/* Icons, not words: undo, redo and clear are the same three
@@ -12464,8 +12347,8 @@ function resizePromptClip(id, edge, rawFrame) {
 													<button
 														type="button"
 														disabled={!matteStats.canUndo}
-														title={ko("Undo", "실행 취소")}
-														aria-label={ko("Undo", "실행 취소")}
+														title={ko("Undo", "실행 취소", "撤销")}
+														aria-label={ko("Undo", "실행 취소", "撤销")}
 														onClick={() => matteEditorRef.current?.undo()}
 													>
 														<span aria-hidden="true">↩️</span>
@@ -12473,8 +12356,8 @@ function resizePromptClip(id, edge, rawFrame) {
 													<button
 														type="button"
 														disabled={!matteStats.canRedo}
-														title={ko("Redo", "다시 실행")}
-														aria-label={ko("Redo", "다시 실행")}
+														title={ko("Redo", "다시 실행", "重做")}
+														aria-label={ko("Redo", "다시 실행", "重做")}
 														onClick={() => matteEditorRef.current?.redo()}
 													>
 														<span aria-hidden="true">↪️</span>
@@ -12483,8 +12366,8 @@ function resizePromptClip(id, edge, rawFrame) {
 												<div className="presets matte-modes matte-icons matte-clear">
 													<button
 														type="button"
-														title={ko("Clear the selection", "선택 모두 지우기")}
-														aria-label={ko("Clear the selection", "선택 모두 지우기")}
+														title={ko("Clear the selection", "선택 모두 지우기", "清除选择")}
+														aria-label={ko("Clear the selection", "선택 모두 지우기", "清除选择")}
 														onClick={() => matteEditorRef.current?.clear()}
 													>
 														<span aria-hidden="true">🗑️</span>
@@ -12493,7 +12376,7 @@ function resizePromptClip(id, edge, rawFrame) {
 											</div>
 										</div>
 										<div className="matte-slider">
-											<label htmlFor="matte-tolerance">{ko("Tolerance", "허용치")}</label>
+											<label htmlFor="matte-tolerance">{ko("Tolerance", "허용치", "容差")}</label>
 											<input
 												id="matte-tolerance"
 												type="range"
@@ -12514,7 +12397,7 @@ function resizePromptClip(id, edge, rawFrame) {
 												max="0.6"
 												step="0.01"
 												value={matteTolerance}
-												aria-label={ko("Tolerance", "허용치")}
+												aria-label={ko("Tolerance", "허용치", "容差")}
 												onChange={(event) => {
 													const value = Number(event.target.value);
 													if (!Number.isFinite(value)) return;
@@ -12523,7 +12406,7 @@ function resizePromptClip(id, edge, rawFrame) {
 												}}
 											/>
 										<div className="matte-slider">
-											<label htmlFor="matte-brush">{ko("Brush", "붓 크기")}</label>
+											<label htmlFor="matte-brush">{ko("Brush", "붓 크기", "笔刷")}</label>
 											<input
 												id="matte-brush"
 												type="range"
@@ -12544,7 +12427,7 @@ function resizePromptClip(id, edge, rawFrame) {
 												max="200"
 												step="1"
 												value={matteBrush}
-												aria-label={ko("Brush size", "붓 크기")}
+												aria-label={ko("Brush size", "붓 크기", "笔刷大小")}
 												onChange={(event) => {
 													const value = Number(event.target.value);
 													if (!Number.isFinite(value)) return;
@@ -12554,7 +12437,7 @@ function resizePromptClip(id, edge, rawFrame) {
 											/>
 										</div>
 										<div className="matte-slider">
-											<label htmlFor="matte-shrink">{ko("Edge shrink", "가장자리 먹기")}</label>
+											<label htmlFor="matte-shrink">{ko("Edge shrink", "가장자리 먹기", "边缘内收")}</label>
 											<input
 												id="matte-shrink"
 												type="range"
@@ -12571,7 +12454,7 @@ function resizePromptClip(id, edge, rawFrame) {
 												max="3"
 												step="0.5"
 												value={matteShrink}
-												aria-label={ko("Edge shrink", "가장자리 먹기")}
+												aria-label={ko("Edge shrink", "가장자리 먹기", "边缘内收")}
 												onChange={(event) => {
 													const value = Number(event.target.value);
 													if (Number.isFinite(value)) setMatteShrink(value);
@@ -12579,7 +12462,7 @@ function resizePromptClip(id, edge, rawFrame) {
 											/>
 										</div>
 										<div className="matte-slider">
-											<label htmlFor="matte-feather">{ko("Edge feather", "가장자리 부드럽게")}</label>
+											<label htmlFor="matte-feather">{ko("Edge feather", "가장자리 부드럽게", "边缘羽化")}</label>
 											<input
 												id="matte-feather"
 												type="range"
@@ -12596,7 +12479,7 @@ function resizePromptClip(id, edge, rawFrame) {
 												max="3"
 												step="0.5"
 												value={matteFeather}
-												aria-label={ko("Edge feather", "가장자리 부드럽게")}
+												aria-label={ko("Edge feather", "가장자리 부드럽게", "边缘羽化")}
 												onChange={(event) => {
 													const value = Number(event.target.value);
 													if (Number.isFinite(value)) setMatteFeather(value);
@@ -12605,10 +12488,7 @@ function resizePromptClip(id, edge, rawFrame) {
 										</div>
 										</div>
 										<p className="inspector-hint">
-											{ko(
-												"Tolerance is how far a drag spreads: low keeps to one flat colour, high walks across a shaded wall. It applies to the next drag and to Auto-detect, not to what is already purple.",
-												"허용치는 드래그가 얼마나 번질지입니다. 낮으면 한 가지 색에 머무르고, 높으면 명암이 변하는 벽까지 따라갑니다. 이미 칠한 보라가 아니라 다음 드래그와 자동 인식에 적용됩니다.",
-											)}
+											{ko("Tolerance is how far a drag spreads: low keeps to one flat colour, high walks across a shaded wall. It applies to the next drag and to Auto-detect, not to what is already purple.", "허용치는 드래그가 얼마나 번질지입니다. 낮으면 한 가지 색에 머무르고, 높으면 명암이 변하는 벽까지 따라갑니다. 이미 칠한 보라가 아니라 다음 드래그와 자동 인식에 적용됩니다.", "容差是一次拖开的范围：低则守住一块平色，高则穿过有明暗的墙。只作用于下一次拖和自动识别，不影响已经是紫色的部分。")}
 										</p>
 										<button
 											type="button"
@@ -12617,14 +12497,12 @@ function resizePromptClip(id, edge, rawFrame) {
 												const added = matteEditorRef.current?.autoDetect(matteTolerance) ?? 0;
 												if (!added) {
 													setToast(
-														isKo
-															? "자동 인식이 더 칠할 곳을 찾지 못했어요 — 허용치를 높이거나 직접 칠하세요"
-															: "Auto-detect found nothing new to paint — raise the tolerance, or paint it by hand",
+														ko(`Auto-detect found nothing new to paint — raise the tolerance, or paint it by hand`, `자동 인식이 더 칠할 곳을 찾지 못했어요 — 허용치를 높이거나 직접 칠하세요`, `自动识别没有找到更多可涂的区域 — 提高容差，或自己涂`),
 													);
 												}
 											}}
 										>
-											{ko("Auto-detect background", "배경 자동 인식")}
+											{ko("Auto-detect background", "배경 자동 인식", "自动识别背景")}
 										</button>
 										<button
 											type="button"
@@ -12633,18 +12511,13 @@ function resizePromptClip(id, edge, rawFrame) {
 											onClick={() => applyMatte(selectedSceneObject.id)}
 										>
 											{matteBusy
-												? ko("Removing…", "지우는 중…")
+												? ko("Removing…", "지우는 중…", "清除中…")
 												: matteStats.painted
-													? isKo
-														? `보라색 부분 지우기 — 사진의 ${Math.round(matteStats.coverage * 100)}%`
-														: `Remove what is purple — ${Math.round(matteStats.coverage * 100)}% of the picture`
-													: ko("Nothing is marked yet", "아직 선택된 부분이 없습니다")}
+													? ko(`Remove what is purple — ${Math.round(matteStats.coverage * 100)}% of the picture`, `보라색 부분 지우기 — 사진의 ${Math.round(matteStats.coverage * 100)}%`, `去掉紫色部分 — 占照片 ${Math.round(matteStats.coverage * 100)}%`)
+													: ko("Nothing is marked yet", "아직 선택된 부분이 없습니다", "还没有选中任何部分")}
 										</button>
 										<p className="inspector-hint">
-											{ko(
-												"Cut out grows the selection from wherever you drag; Bring back is the same growth fenced to what is already selected, so one drag returns a wrongly-cut region whole. Applying removes exactly what is purple and trims the empty margin — the card keeps the original photograph and this selection, so you can come back and change your mind.",
-												"누끼 따기는 드래그한 자리에서 선택 영역을 키우고, 되살리기는 그 성장을 이미 선택된 범위 안으로 가둔 것이라 잘못 잘린 부분이 드래그 한 번에 통째로 돌아옵니다. 적용하면 보라색 부분만 지우고 여백을 잘라냅니다 — 원본 사진과 지금 선택한 영역은 카드에 남아 있어 언제든 다시 열어 고칠 수 있습니다.",
-											)}
+											{ko("Cut out grows the selection from wherever you drag; Bring back is the same growth fenced to what is already selected, so one drag returns a wrongly-cut region whole. Applying removes exactly what is purple and trims the empty margin — the card keeps the original photograph and this selection, so you can come back and change your mind.", "누끼 따기는 드래그한 자리에서 선택 영역을 키우고, 되살리기는 그 성장을 이미 선택된 범위 안으로 가둔 것이라 잘못 잘린 부분이 드래그 한 번에 통째로 돌아옵니다. 적용하면 보라색 부분만 지우고 여백을 잘라냅니다 — 원본 사진과 지금 선택한 영역은 카드에 남아 있어 언제든 다시 열어 고칠 수 있습니다.", "抠图从你拖的地方扩大选区；还原是同样的扩大但限制在已选范围内，所以一拖就能整块找回切错的区域。应用后只去掉紫色并裁掉空边 — 卡片还留着原图和这次选择，随时能回来改。")}
 										</p>
 									</>
 								)}
@@ -12655,23 +12528,23 @@ function resizePromptClip(id, edge, rawFrame) {
 										<summary
 										className="object-color current"
 										style={{ background: selectedSceneObject.color }}
-										aria-label={ko("Object colour", "오브젝트 색상")}
-										title={ko("Object colour", "오브젝트 색상")}
+										aria-label={ko("Object colour", "오브젝트 색상", "物体颜色")}
+										title={ko("Object colour", "오브젝트 색상", "物体颜色")}
 									/>
 									{/* The displayed color while auto-color mode is on — the "hex"
 									    made visible. Computed inline off the RAW object; the swatch
 									    above keeps showing the authored color it returns to. */}
 									{autoColor && (
-										<span className="auto-color-hex">{ko("auto ", "자동 ")}{autoColorHex(selectedSceneObject.id)}</span>
+										<span className="auto-color-hex">{ko("auto ", "자동 ", "自动 ")}{autoColorHex(selectedSceneObject.id)}</span>
 									)}
-									<div className="object-colors" role="group" aria-label={ko("Object colour", "오브젝트 색상")}>
+									<div className="object-colors" role="group" aria-label={ko("Object colour", "오브젝트 색상", "物体颜色")}>
 										{OBJECT_COLORS.map((color) => (
 											<button
 												type="button"
 												key={color}
 												className={"object-color" + (selectedSceneObject.color === color ? " active" : "")}
 												style={{ background: color }}
-												aria-label={isKo ? `색상 ${color}` : `Colour ${color}`}
+												aria-label={ko(`Colour ${color}`, `색상 ${color}`, `颜色 ${color}`)}
 												aria-pressed={selectedSceneObject.color === color}
 												onClick={(event) => {
 													changeSceneObject(selectedSceneObject.id, { color });
@@ -12690,7 +12563,7 @@ function resizePromptClip(id, edge, rawFrame) {
 												key={color}
 												className={"object-color" + (selectedSceneObject.color === color ? " active" : "")}
 												style={{ background: color }}
-												aria-label={isKo ? `최근 색상 ${color}` : `Recent colour ${color}`}
+												aria-label={ko(`Recent colour ${color}`, `최근 색상 ${color}`, `最近颜色 ${color}`)}
 												aria-pressed={selectedSceneObject.color === color}
 												onClick={(event) => {
 													changeSceneObject(selectedSceneObject.id, { color });
@@ -12708,8 +12581,8 @@ function resizePromptClip(id, edge, rawFrame) {
 											type="color"
 											className="object-color object-color-free"
 											value={normalizeObjectColor(selectedSceneObject.color) ?? "#ffffff"}
-											title={ko("Custom colour", "직접 고른 색상")}
-											aria-label={ko("Custom colour", "직접 고른 색상")}
+											title={ko("Custom colour", "직접 고른 색상", "自定义颜色")}
+											aria-label={ko("Custom colour", "직접 고른 색상", "自定义颜色")}
 											onChange={(event) => {
 												const color = normalizeObjectColor(event.target.value);
 												if (!color) return;
@@ -12727,8 +12600,8 @@ function resizePromptClip(id, edge, rawFrame) {
 											spellCheck={false}
 											maxLength={7}
 											placeholder="#rrggbb"
-											title={ko("Colour hex", "색상 hex")}
-											aria-label={ko("Colour hex", "색상 hex")}
+											title={ko("Colour hex", "색상 hex", "颜色 hex")}
+											aria-label={ko("Colour hex", "색상 hex", "颜色 hex")}
 											onChange={(event) => {
 												setObjectColorDraft(event.target.value);
 												const color = normalizeObjectColor(event.target.value);
@@ -12747,7 +12620,7 @@ function resizePromptClip(id, edge, rawFrame) {
 					</div>
 					{selectedSceneObject && (
 						<div className="inspector-footer">
-							<span>{ko("Delete or Backspace to remove", "Delete 또는 Backspace로 삭제")}</span>
+							<span>{ko("Delete or Backspace to remove", "Delete 또는 Backspace로 삭제", "Delete 或 Backspace 删除")}</span>
 						</div>
 					)}
 					</section>
@@ -12794,9 +12667,9 @@ function resizePromptClip(id, edge, rawFrame) {
 									else if (posingIndex >= 0) recordCharacterUndo();
 									setPosed(pose);
 									closeStudio();
-									setToast(hadMotion ? ko("Cleared the current motion and applied the pose", "현재 모션을 지우고 포즈를 적용했어요") : ko("Pose applied", "포즈를 적용했어요"));
+									setToast(hadMotion ? ko("Cleared the current motion and applied the pose", "현재 모션을 지우고 포즈를 적용했어요", "已清除当前动作并应用姿势") : ko("Pose applied", "포즈를 적용했어요", "已应用姿势"));
 								} else {
-									setToast(ko("Couldn't find the selected pose — pick again", "선택한 포즈를 찾지 못했어요. 다시 골라 주세요"));
+									setToast(ko("Couldn't find the selected pose — pick again", "선택한 포즈를 찾지 못했어요. 다시 골라 주세요", "没找到选中的姿势 — 请再选一次"));
 								}
 							}}
 							onReset={() => {
@@ -12804,7 +12677,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								else if (posingIndex >= 0) recordCharacterUndo();
 								setStudioPick(DEFAULT_POSE.id);
 								setPosed(DEFAULT_POSE);
-								setToast(ko("Back to the default pose", "기본 포즈로 돌아왔어요"));
+								setToast(ko("Back to the default pose", "기본 포즈로 돌아왔어요", "已回到默认姿势"));
 							}}
 							onSave={savePose}
 							onPhoto={() => {
@@ -12823,18 +12696,18 @@ function resizePromptClip(id, edge, rawFrame) {
 			<div
 				className="workspace-splitter timeline-splitter"
 				role="separator"
-				aria-label={ko("Resize frame monitor", "프레임 모니터 크기 조절")}
+				aria-label={ko("Resize frame monitor", "프레임 모니터 크기 조절", "调整帧监视器大小")}
 				onPointerDown={(event) => beginWorkspaceResize("timeline", event)}
 			/>
 			<div className="bottom-window">
-				<nav className="bottom-window-tabs" aria-label={ko("Bottom window", "하단 창")}>
+				<nav className="bottom-window-tabs" aria-label={ko("Bottom window", "하단 창", "底部窗口")}>
 					<button
 						type="button"
 						className={bottomTab === "timeline" ? "active" : ""}
 						aria-pressed={bottomTab === "timeline"}
 						onClick={() => setBottomTab("timeline")}
 					>
-						{ko("Animation", "애니메이션")}
+						{ko("Animation", "애니메이션", "动画")}
 					</button>
 					<button
 						type="button"
@@ -12842,7 +12715,7 @@ function resizePromptClip(id, edge, rawFrame) {
 						aria-pressed={bottomTab === "assets"}
 						onClick={() => setBottomTab("assets")}
 					>
-						{ko("Assets", "에셋")}
+						{ko("Assets", "에셋", "资源")}
 					</button>
 				</nav>
 				<div className="assets-pane" hidden={bottomTab !== "assets"}>
@@ -12878,20 +12751,20 @@ function resizePromptClip(id, edge, rawFrame) {
 				data-line-preview-url={linePreviewUrl || undefined}
 				data-take-source={takeSourceUrl || undefined}
 			>
-					<div className="take-modes" role="group" aria-label={ko("Take editing", "테이크 편집")}>
+					<div className="take-modes" role="group" aria-label={ko("Take editing", "테이크 편집", "条编辑")}>
 						{[
 							{
 								id: "scene",
-								label: ko("Scene", "장면"),
-								hint: ko("Kimodo — block it, redo it, extend it", "Kimodo — 새로 만들고, 다시 뽑고, 블록을 잇습니다"),
+								label: ko("Scene", "장면", "场景"),
+								hint: ko("Kimodo — block it, redo it, extend it", "Kimodo — 새로 만들고, 다시 뽑고, 블록을 잇습니다", "Kimodo — 先分块，再重做，再续上"),
 								reason: sceneDisabledReason(),
 								active: sceneMenuOpen,
 								onClick: () => setSceneMenuOpen((open) => !open),
 							},
 							{
 								id: "refine",
-								label: ko("Refine", "다듬기"),
-								hint: ko("ProjFlow — grab the joint's path and pull", "ProjFlow — 관절 궤적을 잡아 끌어 다듬습니다"),
+								label: ko("Refine", "다듬기", "微调"),
+								hint: ko("ProjFlow — grab the joint's path and pull", "ProjFlow — 관절 궤적을 잡아 끌어 다듬습니다", "ProjFlow — 抓住关节轨迹再拉"),
 								reason: refineDisabledReason(),
 								active: lineEditMode,
 								onClick: enterRefineMode,
@@ -12921,9 +12794,9 @@ function resizePromptClip(id, edge, rawFrame) {
 					{sceneMenuOpen && (
 						<div className="take-scene-menu">
 							{[
-								{ id: "new", label: ko("Start over", "새로 만들기"), reason: sceneGenerateDisabledReason(), onClick: () => runArdy({ fresh: true }) },
-								{ id: "again", label: ko("Take it again", "다시 뽑기"), reason: sceneAgainDisabledReason(), onClick: runSceneAgain },
-								{ id: "block", label: isKo ? `프레임 ${tlFrame}에 블록 추가` : `Add a block at frame ${tlFrame}`, reason: "", onClick: addSceneBlock },
+								{ id: "new", label: ko("Start over", "새로 만들기", "重新开始"), reason: sceneGenerateDisabledReason(), onClick: () => runArdy({ fresh: true }) },
+								{ id: "again", label: ko("Take it again", "다시 뽑기", "再来一条"), reason: sceneAgainDisabledReason(), onClick: runSceneAgain },
+								{ id: "block", label: ko(`Add a block at frame ${tlFrame}`, `프레임 ${tlFrame}에 블록 추가`, `在第 ${tlFrame} 帧添加块`), reason: "", onClick: addSceneBlock },
 							].map((action) => (
 								<div className="take-scene-action" key={action.id}>
 									<button
@@ -12946,8 +12819,8 @@ function resizePromptClip(id, edge, rawFrame) {
 							    the first thing on screen. */}
 							{motion?.url && (
 								<details className="take-scene-advanced">
-									<summary>{ko("Advanced", "고급")}</summary>
-									<Field label={ko("Keep the current take", "현재 테이크 유지")}>
+									<summary>{ko("Advanced", "고급", "高级")}</summary>
+									<Field label={ko("Keep the current take", "현재 테이크 유지", "保留当前条")}>
 										<div className="preserve-strength-row">
 											<input
 												type="range"
@@ -12956,10 +12829,7 @@ function resizePromptClip(id, edge, rawFrame) {
 												max={1}
 												step={0.05}
 												value={preserveStrength}
-												title={ko(
-													"How hard the regeneration holds the loaded take outside the frames you edited.",
-													"수정하지 않은 프레임에서 로드된 테이크를 얼마나 강하게 유지할지 정합니다.",
-												)}
+												title={ko("How hard the regeneration holds the loaded take outside the frames you edited.", "수정하지 않은 프레임에서 로드된 테이크를 얼마나 강하게 유지할지 정합니다.", "重生成时，在你没改的帧上有多紧地抓住已加载的那一条。")}
 												onChange={(event) => setPreserveStrength(Number(event.target.value))}
 											/>
 											<span className="preserve-strength-value">{Math.round(preserveStrength * 100)}%</span>
@@ -12968,8 +12838,8 @@ function resizePromptClip(id, edge, rawFrame) {
 										    slider value IS the preserve strength, so 0 (left) is a
 										    fresh take and 1 (right) holds the original hardest. */}
 										<p className="inspector-hint preserve-strength-scale">
-											<span>{ko("generate fresh", "새로 생성")}</span>
-											<span>{ko("keep original", "원본 유지")}</span>
+											<span>{ko("generate fresh", "새로 생성", "重新生成")}</span>
+											<span>{ko("keep original", "원본 유지", "保留原片")}</span>
 										</p>
 										{/* Round 2 allows the pair the round-1 slider refused (contract
 										    C3v2, paper 4.4), so this line no longer explains a disabled
@@ -12977,10 +12847,7 @@ function resizePromptClip(id, edge, rawFrame) {
 										    now owns. Only worth saying when preserving is actually on. */}
 										{waypointMode && preserveStrength > 0 && (
 											<p className="inspector-hint">
-												{ko(
-													"the drawn path replaces the root; the body keeps the take's style",
-													"경로는 새로 그려지고, 동작 스타일은 원본을 유지해요",
-												)}
+												{ko("the drawn path replaces the root; the body keeps the take's style", "경로는 새로 그려지고, 동작 스타일은 원본을 유지해요", "画出的路径会替换根路径；身体仍保持这条的风格")}
 											</p>
 										)}
 										{/* What the grouped mask will actually free. Empty whenever the
@@ -12995,9 +12862,7 @@ function resizePromptClip(id, edge, rawFrame) {
 											{/* A seedless recipe is an IMPORTED take: it checkpoints and reloads,
 											    but it cannot be rebuilt or replayed, so the line says so rather
 											    than printing "seed null". */}
-											{isKo
-												? `레시피 — 시드 ${Number.isInteger(takeRecipe.seed) ? takeRecipe.seed : "알 수 없음(불러온 테이크)"} · 블록 ${takeRecipe.blocks.length}개 · 다듬기 ${takeRecipe.lineEdits.length}개`
-												: `Recipe — seed ${Number.isInteger(takeRecipe.seed) ? takeRecipe.seed : "unknown (imported take)"} · ${takeRecipe.blocks.length} block(s) · ${takeRecipe.lineEdits.length} refinement(s)`}
+											{ko(`Recipe — seed ${Number.isInteger(takeRecipe.seed) ? takeRecipe.seed : "unknown (imported take)"} · ${takeRecipe.blocks.length} block(s) · ${takeRecipe.lineEdits.length} refinement(s)`, `레시피 — 시드 ${Number.isInteger(takeRecipe.seed) ? takeRecipe.seed : "알 수 없음(불러온 테이크)"} · 블록 ${takeRecipe.blocks.length}개 · 다듬기 ${takeRecipe.lineEdits.length}개`, `配方 — 种子 ${Number.isInteger(takeRecipe.seed) ? takeRecipe.seed : "未知（导入镜头）"} · ${takeRecipe.blocks.length} 个块 · ${takeRecipe.lineEdits.length} 次精修`)}
 										</p>
 									)}
 								</details>
@@ -13009,7 +12874,7 @@ function resizePromptClip(id, edge, rawFrame) {
 					    is ever dropped from the strip by loading, so an experiment can
 					    always be walked back. */}
 					{takeVersions.length > 0 && (
-						<div className="take-version-strip" role="group" aria-label={ko("Take versions", "테이크 버전")}>
+						<div className="take-version-strip" role="group" aria-label={ko("Take versions", "테이크 버전", "条版本")}>
 							{takeVersions.map((entry, index) => (
 								<button
 									type="button"
@@ -13033,12 +12898,12 @@ function resizePromptClip(id, edge, rawFrame) {
 					{replayNotices.map((entry) => (
 						<p className="replay-notice" key={`${entry.index}-${entry.track}`} data-replay-index={entry.index} data-replay-track={entry.track}>
 							{entry.ok === false
-								? (isKo
-									? `다듬기 ${entry.index + 1}(${lineTrackLabel(entry.track)})은 다시 적용되지 않았어요 — 나머지는 그대로 이어졌습니다${entry.error ? ` (${entry.error})` : ""}`
-									: `Refinement ${entry.index + 1} (${lineTrackLabel(entry.track)}) was not re-applied — the rest carried over${entry.error ? ` (${entry.error})` : ""}`)
-								: (isKo
-									? `다듬기 ${entry.index + 1}(${lineTrackLabel(entry.track)})은 블록 경계에 걸쳐 있어요 — 결과가 이전과 조금 다를 수 있습니다`
-									: `Refinement ${entry.index + 1} (${lineTrackLabel(entry.track)}) straddles a block boundary — the result may differ slightly from before`)}
+								? ko(
+									`Refinement ${entry.index + 1} (${lineTrackLabel(entry.track)}) was not re-applied — the rest carried over${entry.error ? ` (${entry.error})` : ""}`,
+									`다듬기 ${entry.index + 1}(${lineTrackLabel(entry.track)})은 다시 적용되지 않았어요 — 나머지는 그대로 이어졌습니다${entry.error ? ` (${entry.error})` : ""}`,
+									`精修 ${entry.index + 1}（${lineTrackLabel(entry.track)}）没有重放 — 其余已带上${entry.error ? `（${entry.error}）` : ""}`,
+								)
+								: (ko(`Refinement ${entry.index + 1} (${lineTrackLabel(entry.track)}) straddles a block boundary — the result may differ slightly from before`, `다듬기 ${entry.index + 1}(${lineTrackLabel(entry.track)})은 블록 경계에 걸쳐 있어요 — 결과가 이전과 조금 다를 수 있습니다`, `精修 ${entry.index + 1}（${lineTrackLabel(entry.track)}）跨过了块边界 — 结果可能和之前略有不同`))}
 						</p>
 					))}
 				</div>
@@ -13068,7 +12933,7 @@ function resizePromptClip(id, edge, rawFrame) {
 				ikDisabled={!ikChains}
 				motion={motion ? {
 					frames: motion.frames,
-					label: motion.prompt || ko("Loaded take", "불러온 테이크"),
+					label: motion.prompt || ko("Loaded take", "불러온 테이크", "已载入的条"),
 					segments: motionEditLayout(motion.editSegments ?? createMotionEdit(motion.frames)),
 				} : null}
 				onMotionTrim={applyMotionTrim}
@@ -13113,13 +12978,13 @@ function resizePromptClip(id, edge, rawFrame) {
 				onIkKeyframeRemove={ikDeleteKeyframe}
 				onBodyContactToggle={() => {
 					setBodyContact((v) => {
-						setToast(v ? ko("Body contact off — floor constraints are disabled", "바닥 접촉 꺼짐 — 바닥 제약이 비활성화됩니다") : ko("Body contact on — body markers stay above the floor", "바닥 접촉 켜짐 — 신체 접촉점이 바닥 아래로 내려가지 않습니다"));
+						setToast(v ? ko("Body contact off — floor constraints are disabled", "바닥 접촉 꺼짐 — 바닥 제약이 비활성화됩니다", "贴地已关 — 地面约束已停用") : ko("Body contact on — body markers stay above the floor", "바닥 접촉 켜짐 — 신체 접촉점이 바닥 아래로 내려가지 않습니다", "贴地已开 — 身体接触点不会落到地面以下"));
 						return !v;
 					});
 				}}
 				onFootSnapToggle={() => {
 					setFootSnap((v) => {
-				setToast(v ? ko("Foot snap off — the feet follow the body", "발 스냅 꺼짐 — 발이 몸을 따라갑니다") : ko("Foot snap on — the feet stay planted while the body moves", "발 스냅 켜짐 — 몸이 움직여도 발은 바닥에 고정됩니다"));
+				setToast(v ? ko("Foot snap off — the feet follow the body", "발 스냅 꺼짐 — 발이 몸을 따라갑니다", "脚吸附已关 — 脚会跟着身体走") : ko("Foot snap on — the feet stay planted while the body moves", "발 스냅 켜짐 — 몸이 움직여도 발은 바닥에 고정됩니다", "脚吸附已开 — 身体动时脚钉在地上"));
 						return !v;
 					});
 				}}
@@ -13179,15 +13044,12 @@ function resizePromptClip(id, edge, rawFrame) {
 						// camera bar above edits the selected one.
 						changeActiveCamera(nextPatch, shotId);
 						if (patch.mode === "follow" && !motion) {
-							setToast(ko(
-								"Follow rides the subject's motion — without a loaded motion the camera composes a static frame",
-								"팔로우 카메라는 인물 모션을 따라 움직입니다 — 모션이 없으면 카메라는 정지 구도를 유지합니다",
-							));
+							setToast(ko("Follow rides the subject's motion — without a loaded motion the camera composes a static frame", "팔로우 카메라는 인물 모션을 따라 움직입니다 — 모션이 없으면 카메라는 정지 구도를 유지합니다", "跟随会跟着人物运动 — 没有加载动作时，相机会组成一个静止画面"));
 						}
 						if (patch.mode === "rail" && !cameraRail) {
 							setRailDraw(true);
 							setWorkspaceLayout((current) => ({ ...current, insetCollapsed: false }));
-							setToast(ko("Draw this Camera Block's rail in the Top-View", "탑뷰에서 이 카메라 블록의 레일을 그리세요"));
+							setToast(ko("Draw this Camera Block's rail in the Top-View", "탑뷰에서 이 카메라 블록의 레일을 그리세요", "在顶视图里画这个相机块的轨道"));
 						}
 					}}
 					onCameraPreview={previewCameraShot}
@@ -13268,7 +13130,7 @@ function resizePromptClip(id, edge, rawFrame) {
 			<Toast message={toast} onDone={() => setToast("")} />
 			{pwaUpdate && (
 				<div className="scene-delete-toast" role="status">
-					<span>{ko("A new version of CozyClay is ready.", "CozyClay 새 버전이 준비됐어요.")}</span>
+					<span>{ko("A new version of CozyClay is ready.", "CozyClay 새 버전이 준비됐어요.", "CozyClay 新版本准备好了。")}</span>
 					<button
 						type="button"
 						onClick={() => {
@@ -13278,45 +13140,45 @@ function resizePromptClip(id, edge, rawFrame) {
 							setPwaUpdate(null);
 						}}
 					>
-						{ko("Reload to update", "새로고침해 업데이트")}
+						{ko("Reload to update", "새로고침해 업데이트", "刷新以更新")}
 					</button>
 					<button type="button" className="ghost" onClick={() => setPwaUpdate(null)}>
-						{ko("Later", "나중에")}
+						{ko("Later", "나중에", "稍后")}
 					</button>
 				</div>
 			)}
 			{objectDeleteUndo && (
 				<div className="scene-delete-toast" role="status">
-					<span>{ko("Object deleted.", "오브젝트를 삭제했어요.")}</span>
-					<button type="button" aria-label={ko("Undo object deletion", "오브젝트 삭제 실행 취소")} onClick={undoObjectDeletion}>
-						{ko("Undo", "실행 취소")}
+					<span>{ko("Object deleted.", "오브젝트를 삭제했어요.", "已删除物体。")}</span>
+					<button type="button" aria-label={ko("Undo object deletion", "오브젝트 삭제 실행 취소", "撤销删除物体")} onClick={undoObjectDeletion}>
+						{ko("Undo", "실행 취소", "撤销")}
 					</button>
 				</div>
 			)}
 			{restoreOffer && (
 				<div className="asset-delete-toast" role="status">
-					<span>{isKo ? `마지막 프로젝트 복원${restoreOffer.name ? `: ${restoreOffer.name}` : ""}` : `Restore last project${restoreOffer.name ? `: ${restoreOffer.name}` : ""}`}</span>
+					<span>{ko(`Restore last project${restoreOffer.name ? `: ${restoreOffer.name}` : ""}`, `마지막 프로젝트 복원${restoreOffer.name ? `: ${restoreOffer.name}` : ""}`, `恢复上次项目${restoreOffer.name ? `：${restoreOffer.name}` : ""}`)}</span>
 					<button
 						type="button"
 						onClick={async () => {
 							const record = restoreOffer;
 							setRestoreOffer(null);
 							if ((await requestHandlePermission(record.handle)) !== "granted") {
-								setToast(ko("Project access was not granted.", "프로젝트 접근이 허용되지 않았어요."));
+								setToast(ko("Project access was not granted.", "프로젝트 접근이 허용되지 않았어요.", "没有授予项目权限。"));
 								return;
 							}
 							await restoreStoredProject(record);
 						}}
 					>
-						{ko("Restore", "복원")}
+						{ko("Restore", "복원", "恢复")}
 					</button>
-					<button type="button" onClick={() => setRestoreOffer(null)} aria-label={ko("Dismiss", "닫기")}>✕</button>
+					<button type="button" onClick={() => setRestoreOffer(null)} aria-label={ko("Dismiss", "닫기", "关闭")}>✕</button>
 				</div>
 			)}
 			{assetTrash.length > 0 && assetUndoOffered && (
 				<div className="asset-delete-toast" role="status">
-					<span>{ko("Image deleted. This session can undo it.", "이미지를 삭제했어요. 이 세션에서 실행 취소할 수 있어요.")}</span>
-					<button type="button" onClick={undoDeletedAsset} disabled={Boolean(deletingAssetId)}>{ko("Undo", "실행 취소")}</button>
+					<span>{ko("Image deleted. This session can undo it.", "이미지를 삭제했어요. 이 세션에서 실행 취소할 수 있어요.", "已删除图片。这次会话里还可以撤销。")}</span>
+					<button type="button" onClick={undoDeletedAsset} disabled={Boolean(deletingAssetId)}>{ko("Undo", "실행 취소", "撤销")}</button>
 				</div>
 			)}
 			{assetDrag && (
@@ -13361,7 +13223,7 @@ function ReferenceImageField({ label, hint, value, alt, onPick, onClear, inputPr
 				<span className="reference-slot-label">{label}</span>
 				{value && (
 					<button type="button" className="btn ghost small" onClick={() => { setError(""); onClear(); }}>
-						{ko("Clear", "지우기")}
+						{ko("Clear", "지우기", "清除")}
 					</button>
 				)}
 			</div>
@@ -13371,7 +13233,7 @@ function ReferenceImageField({ label, hint, value, alt, onPick, onClear, inputPr
 					className="reference-slot-thumb"
 					data-empty={value ? undefined : "true"}
 					onClick={() => inputRef.current?.click()}
-					title={ko("Choose a reference picture", "참고 이미지를 선택합니다")}
+					title={ko("Choose a reference picture", "참고 이미지를 선택합니다", "选择参考图")}
 				>
 					{value
 						? <img src={value} alt={alt ?? label} />
@@ -13380,7 +13242,7 @@ function ReferenceImageField({ label, hint, value, alt, onPick, onClear, inputPr
 				<div className="reference-slot-copy">
 					<p className="inspector-hint">{hint}</p>
 					<button type="button" className="btn ghost small" onClick={() => inputRef.current?.click()}>
-						{value ? ko("Replace", "교체") : ko("Choose image", "이미지 선택")}
+						{value ? ko("Replace", "교체", "替换") : ko("Choose image", "이미지 선택", "选择图片")}
 					</button>
 				</div>
 			</div>
@@ -13401,7 +13263,7 @@ function ReferenceImageField({ label, hint, value, alt, onPick, onClear, inputPr
 					try {
 						onPick(await readReferenceImage(file));
 					} catch (failure) {
-						setError(isKo ? `이미지를 불러오지 못했어요 — ${failure.message}` : `Could not load that image — ${failure.message}`);
+						setError(ko(`Could not load that image — ${failure.message}`, `이미지를 불러오지 못했어요 — ${failure.message}`, `无法加载该图片 — ${failure.message}`));
 					}
 				}}
 			/>
@@ -13451,8 +13313,8 @@ function SubjectBox({ label, value, onChange, onRemove, onPose, posing, color, o
 						<input
 							type="color"
 							className="sb-color"
-							title={ko("Character color", "인물 색상")}
-							aria-label={ko("Character color", "인물 색상")}
+							title={ko("Character color", "인물 색상", "人物颜色")}
+							aria-label={ko("Character color", "인물 색상", "人物颜色")}
 							value={color}
 							/* Focus opens the session for keyboard/eyedropper use; the
 							   native swatch dialog can drive onChange without focus, so the
@@ -13469,15 +13331,15 @@ function SubjectBox({ label, value, onChange, onRemove, onPose, posing, color, o
 						<button
 							type="button"
 							className={"cam-toggle" + (posing ? " active" : "")}
-							aria-label={isKo ? `${label} 포즈 열기` : `Open pose studio for ${label}`}
-							title={isKo ? `${label} 포즈` : `Pose ${label}`}
+							aria-label={ko(`Open pose studio for ${label}`, `${label} 포즈 열기`, `打开 ${label} 的姿势工作室`)}
+							title={ko(`Pose ${label}`, `${label} 포즈`, `${label} 姿势`)}
 							onClick={onPose}
 						>
 							⌘
 						</button>
 					)}
 					{onRemove && (
-						<button type="button" className="sb-remove" title={ko("Remove subject", "인물 제거")} onClick={onRemove}>
+						<button type="button" className="sb-remove" title={ko("Remove subject", "인물 제거", "移除人物")} onClick={onRemove}>
 							✕
 						</button>
 					)}

@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { ko, isKo } from "./locale.js";
+import { ko, isKo, isZh } from "./locale.js";
 import { OBJECT_LIBRARY } from "./scene-objects.js";
 
 const GROUP_LABELS_KO = {
 	Primitives: "기본 도형",
 	"Set pieces": "세트 소품",
+};
+
+const GROUP_LABELS_ZH = {
+	Primitives: "基本形体",
+	"Set pieces": "场景道具",
 };
 
 const OBJECT_LABELS_KO = {
@@ -19,15 +24,30 @@ const OBJECT_LABELS_KO = {
 	"Plane (aircraft)": "비행기",
 };
 
+const OBJECT_LABELS_ZH = {
+	Cube: "立方体",
+	Sphere: "球体",
+	Capsule: "胶囊",
+	Cylinder: "圆柱",
+	Cone: "圆锥",
+	Plane: "平面",
+	Chair: "椅子",
+	Car: "汽车",
+	"Plane (aircraft)": "飞机",
+};
+
 export function displayObjectGroupName(name) {
-	return isKo ? (GROUP_LABELS_KO[name] ?? name) : name;
+	if (isZh) return GROUP_LABELS_ZH[name] ?? name;
+	if (isKo) return GROUP_LABELS_KO[name] ?? name;
+	return name;
 }
 
 export function displayObjectLabel(label) {
-	if (!isKo) return label;
+	const map = isZh ? OBJECT_LABELS_ZH : isKo ? OBJECT_LABELS_KO : null;
+	if (!map) return label;
 	const numbered = label.match(/^(.+?) (\d+)$/);
-	if (numbered && OBJECT_LABELS_KO[numbered[1]]) return `${OBJECT_LABELS_KO[numbered[1]]} ${numbered[2]}`;
-	return OBJECT_LABELS_KO[label] ?? label;
+	if (numbered && map[numbered[1]]) return `${map[numbered[1]]} ${numbered[2]}`;
+	return map[label] ?? label;
 }
 
 /**
@@ -72,7 +92,7 @@ export function CatalogueEntries({ onPick }) {
 	));
 }
 
-export default function AddObjectMenu({ onAdd, label = ko("Add object", "오브젝트 추가") }) {
+export default function AddObjectMenu({ onAdd, label = ko("Add object", "오브젝트 추가", "添加物体") }) {
 	const [open, setOpen] = useState(false);
 	const rootRef = useRef(null);
 

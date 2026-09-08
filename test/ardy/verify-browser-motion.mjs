@@ -36,6 +36,7 @@
  *    asserted > 0.01. Snapshot -> playback perturb -> restore must
  *    reproduce the pre-playback quaternions exactly (bitwise).
  */
+import "../force-en-locale.mjs";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

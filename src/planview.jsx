@@ -253,8 +253,8 @@ function SubjectMovementGuide({ track }) {
 				</mesh>
 			)}
 			{[
-				{ point: guide.start, label: ko("ARDY START", "ARDY 시작") },
-				{ point: guide.end, label: ko("ARDY END", "ARDY 끝") },
+				{ point: guide.start, label: ko("ARDY START", "ARDY 시작", "ARDY 开始") },
+				{ point: guide.end, label: ko("ARDY END", "ARDY 끝", "ARDY 结束") },
 			].map(({ point, label }) => (
 				<group key={label} position={[point.x, 0, point.z]}>
 					<mesh position={[0, 0.055, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={11}>
@@ -268,7 +268,7 @@ function SubjectMovementGuide({ track }) {
 			))}
 			{!guide.moving && (
 				<Text position={[guide.start.x, 0.06, guide.start.z - 0.42]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.24} color={SUBJECT_PATH_COLOR} anchorX="center" anchorY="middle" outlineWidth={0.035} outlineColor="#0e0d10" outlineOpacity={0.82} renderOrder={12} depthOffset={-1}>
-					{ko("PLAYER STILL", "플레이어 정지")}
+					{ko("PLAYER STILL", "플레이어 정지", "播放器静止")}
 				</Text>
 			)}
 		</group>
@@ -390,7 +390,7 @@ function CameraRailLine({ points, live = false }) {
 						renderOrder={12}
 						depthOffset={-1}
 					>
-						{ko("START", "시작")}
+						{ko("START", "시작", "开始")}
 					</Text>
 					{directionGeometry && (
 						<mesh geometry={directionGeometry} renderOrder={11}>
@@ -861,7 +861,7 @@ export function PlanBoard({ hostRef, planCamRef, shotCamRef, look, fovDeg, chara
 	return (
 		<group ref={rootRef}>
 			<group ref={camPos}>
-				<PlanLabel text={ko("CAM", "카메라")} color={CAMERA_COLOR} />
+				<PlanLabel text={ko("CAM", "카메라", "相机")} color={CAMERA_COLOR} />
 				<group ref={camRot}>
 					<FrustumWedge fovDeg={fovDeg} active={drag?.id === "cam"} />
 					<Puck color={CAMERA_COLOR} {...state("cam")} />
@@ -874,7 +874,7 @@ export function PlanBoard({ hostRef, planCamRef, shotCamRef, look, fovDeg, chara
 				const color = listIndex === 0 ? SUBJECT_ONE_COLOR : SUBJECT_TWO_COLOR;
 				return (
 					<group key={entry.id} position={[entry.x, 0, entry.z]}>
-						<PlanLabel text={ko(`S${listIndex + 1}`, `인물 ${listIndex + 1}`)} color={color} />
+						<PlanLabel text={ko(`S${listIndex + 1}`, `인물 ${listIndex + 1}`, `人物 ${listIndex + 1}`)} color={color} />
 						<group rotation={[0, (entry.rot * Math.PI) / 180, 0]}>
 							{/* The real character mesh already renders in Top-View. Keep only
 							    its facing stem/handle instead of covering it with a hex puck. */}
@@ -923,7 +923,7 @@ export function PlanBoard({ hostRef, planCamRef, shotCamRef, look, fovDeg, chara
 							</group>
 						);
 					})()}
-					<PlanLabel text={ko("LIGHT", "조명")} color="#f2b544" offset={-0.5} />
+					<PlanLabel text={ko("LIGHT", "조명", "灯光")} color="#f2b544" offset={-0.5} />
 				</group>
 			)}
 		</group>

@@ -47,9 +47,10 @@ expect("Scene tab keeps the authoring gates on Follow mode", app.includes("moveF
 expect(
 	"Draw Rail row owns the distance Follow On Off toggle",
 	timeline.includes('aria-pressed={mode === "follow"}') &&
-	timeline.includes('mode === "follow" ? ko("Follow On", "팔로우 켜짐") : ko("Follow Off", "팔로우 꺼짐")') &&
+	timeline.includes('mode === "follow" ? ko("Follow On", "팔로우 켜짐"') &&
+	timeline.includes('ko("Follow Off", "팔로우 꺼짐"') &&
 	timeline.includes('patchCamera({ mode: mode === "follow" ? "keys" : "follow" })') &&
-	!app.includes('ko("Follow On", "팔로우 켜짐")') &&
+	!app.includes('ko("Follow On", "팔로우 켜짐"') &&
 	app.includes('if (patch.mode === "follow") syncActiveCameraFraming()'),
 );
 
@@ -115,7 +116,7 @@ expect(
 expect(
 	"one add button creates a separate shared shot-camera card",
 	!timeline.includes('className="tl-track-add cut camera"') &&
-	timeline.includes('ko("+ Add shot", "+ 샷 추가")') &&
+	timeline.includes('ko("+ Add shot", "+ 샷 추가"') &&
 	timeline.includes("handlers.current.onShotCut?.()"),
 );
 expect(
@@ -136,13 +137,13 @@ expect(
 	!timeline.includes('["keys", ko("Keys", "키")]') &&
 	!timeline.includes('["follow", ko("Follow", "팔로우")]') &&
 	!timeline.includes('["rail", ko("Rail", "레일")]') &&
-	timeline.includes('ko("Preview", "미리보기")') &&
-	timeline.includes('ko("Draw rail", "레일 그리기")') &&
-	timeline.includes('ko("Follow On", "팔로우 켜짐")') &&
-	timeline.includes('ko("Speed", "속도")') &&
-	timeline.includes('ko("Pitch", "피치")') &&
-	timeline.includes('ko("Distance", "거리")') &&
-	timeline.includes('ko("Height", "높이")'),
+	timeline.includes('ko("Preview", "미리보기"') &&
+	timeline.includes('ko("Draw rail", "레일 그리기"') &&
+	timeline.includes('ko("Follow On", "팔로우 켜짐"') &&
+	timeline.includes('ko("Speed", "속도"') &&
+	timeline.includes('ko("Pitch", "피치"') &&
+	timeline.includes('ko("Distance", "거리"') &&
+	timeline.includes('ko("Height", "높이"'),
 );
 // Scope the count to CameraBlockEditor: other editors in this file (the
 // object travel path) reuse the same readout class, so a file-wide count
@@ -154,8 +155,8 @@ const cameraEditorSource = timeline.slice(
 // The bar now carries a Speed/Height curve switch as well as the Height
 // READOUT, so measure from the last Height mention before Pitch: it is the
 // readout's own label the pin is about.
-const pitchAt = cameraEditorSource.indexOf('ko("Pitch", "피치")');
-const heightReadoutAt = cameraEditorSource.lastIndexOf('ko("Height", "높이")', pitchAt);
+const pitchAt = cameraEditorSource.indexOf('ko("Pitch", "피치"');
+const heightReadoutAt = cameraEditorSource.lastIndexOf('ko("Height", "높이"', pitchAt);
 expect(
 	"height and pitch are adjacent in the camera bar",
 	heightReadoutAt > 0 && heightReadoutAt < pitchAt &&
@@ -182,9 +183,9 @@ expect(
 	"the rail crane is always on, with a per-point height input",
 	// no toggle: a rail block is always craned (camera-block.js normalizes a
 	// stored null to the flat profile), so the on/off button is gone
-	!timeline.includes('ko("Crane On", "\ud06c\ub808\uc778 \ucf1c\uc9d0")') &&
-	!timeline.includes('ko("Crane Off", "\ud06c\ub808\uc778 \uaebc\uc9d0")') &&
-	timeline.includes('ko("Point height", "\uc810 \ub192\uc774")') &&
+	!timeline.includes('ko("Crane On", "\ud06c\ub808\uc778 \ucf1c\uc9d0"') &&
+	!timeline.includes('ko("Crane Off", "\ud06c\ub808\uc778 \uaebc\uc9d0"') &&
+	timeline.includes('ko("Point height", "\uc810 \ub192\uc774"') &&
 	// a missing stored value seeds the same flat two-mark profile inline
 	timeline.includes("{ points: [{ t: 0, height: follow.height }, { t: 1, height: follow.height }] }") &&
 	// the scene dots are the primary editor; the bar edits the SELECTED point
@@ -194,8 +195,8 @@ expect(
 	"crane points are added on the Shot key strip only, removed explicitly",
 	// no Add point button: the Shot block's key strip is the single authoring
 	// surface for new crane marks (plus double-clicking the lifted curve)
-	!timeline.includes('ko("Add point", "점 추가")') &&
-		timeline.includes('ko("Remove point", "점 삭제")') &&
+	!timeline.includes('ko("Add point", "점 추가"') &&
+		timeline.includes('ko("Remove point", "점 삭제"') &&
 		timeline.includes("onCranePointAdd") &&
 		timeline.includes("onCranePointDelete"),
 );
@@ -217,20 +218,20 @@ expect(
 expect(
 	"damping and look-ahead stay behind advanced disclosure",
 	timeline.includes('className="tl-camera-advanced"') &&
-	timeline.includes('ko("Damping", "댐핑")') &&
-	timeline.includes('ko("Look-ahead", "조준 선행")'),
+	timeline.includes('ko("Damping", "댐핑"') &&
+	timeline.includes('ko("Look-ahead", "조준 선행"'),
 );
 expect(
 	"timeline editor is the single follow-camera settings surface",
 	!app.includes('<Slider label={ko("Distance", "거리")}') &&
 	!app.includes('<Slider label={ko("Dolly speed", "돌리 속도")}') &&
 	app.includes('className="camera-editor-pointer"') &&
-	timeline.includes('ko("Draw rail", "레일 그리기")') &&
-	!timeline.includes('ko("Clear rail", "레일 지우기")'),
+	timeline.includes('ko("Draw rail", "레일 그리기"') &&
+	!timeline.includes('ko("Clear rail", "레일 지우기"'),
 );
 expect(
 	"Draw Rail exposes an explicit delete action",
-	timeline.includes('ko("Delete rail", "레일 삭제")') &&
+	timeline.includes('ko("Delete rail", "레일 삭제"') &&
 	timeline.includes("onRailDelete") &&
 	app.includes("removeCameraRail(activeCamera)"),
 );

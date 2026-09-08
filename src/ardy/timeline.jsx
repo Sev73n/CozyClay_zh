@@ -3,7 +3,7 @@ import { frameFromClientX, groupKeyRuns, KEY_RUN_MIN, motionTrimRange, promptMov
 import { motionSegmentSpeedForFrames } from "./motion-edit.js";
 import { createPlaybackClock } from "./playback-clock.js";
 import { promptResizeFrame } from "./timeline-resize.js";
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import { buildRail, craneHeightAt } from "../camera-follow.js";
 import { pathMetrics } from "../object-path.js";
 import { flatTiming, timingIsFlat, envelopeDrag, insertCut, removeCut, CUT_MIN_GAP } from "../speed-envelope.js";
@@ -46,10 +46,10 @@ const TRACKS = [
 	"Shots",
 ];
 const TRACK_LABELS_KO = {
-	Prompts: ko("Prompts", "프롬프트"),
-	"Full-Body": ko("Full-Body", "전신"),
-	"2D Root": ko("2D Root", "2D 루트"),
-	Shots: ko("Shots", "샷"),
+	Prompts: ko("Prompts", "프롬프트", "提示词"),
+	"Full-Body": ko("Full-Body", "전신", "Full-Body"),
+	"2D Root": ko("2D Root", "2D 루트", "2D 根"),
+	Shots: ko("Shots", "샷", "镜头"),
 };
 
 /** IK keys live on the Full-Body lane: one marker per keyed frame, holding
@@ -244,7 +244,7 @@ function CraneHeightEditor({ crane, railRange, durationFrames, selectedIndex, on
 	const topLabel = maxHeight.toFixed(1);
 	const midLabel = (maxHeight / 2).toFixed(1);
 	return (
-		<div className="tl-crane-editor" title={ko("Crane height: click to add, click a point to select, drag vertically to change height", "크레인 높이: 클릭해 추가하고, 점을 눌러 선택하고, 위아래로 끌어 높이를 바꿉니다")}>
+		<div className="tl-crane-editor" title={ko("Crane height: click to add, click a point to select, drag vertically to change height", "크레인 높이: 클릭해 추가하고, 점을 눌러 선택하고, 위아래로 끌어 높이를 바꿉니다", "摇臂高度：点击加点，点选一个点，上下拖改高度")}>
 			<svg
 				ref={svgRef}
 				className="tl-crane-editor-svg"
@@ -287,7 +287,7 @@ function CraneHeightEditor({ crane, railRange, durationFrames, selectedIndex, on
 					className={"tl-crane-knob" + (index === selectedIndex ? " selected" : "")}
 					// an end point sits ON the window edge; clamp it inside so the knob stays a whole, grabbable circle
 					style={{ left: `clamp(9px, ${xFor(point.t) * 100}%, calc(100% - 9px))`, top: `clamp(9px, ${yFor(point.height) * 100}%, calc(100% - 9px))` }}
-					aria-label={ko(`Crane point ${index + 1}, ${point.height.toFixed(1)} metres`, `크레인 점 ${index + 1}, ${point.height.toFixed(1)}미터`)}
+					aria-label={ko(`Crane point ${index + 1}, ${point.height.toFixed(1)} metres`, `크레인 점 ${index + 1}, ${point.height.toFixed(1)}미터`, `摇臂点 ${index + 1}，${point.height.toFixed(1)} 米`)}
 					onPointerDown={(event) => {
 						event.preventDefault();
 						event.stopPropagation();
@@ -518,30 +518,30 @@ function SpeedGraph({
 	return (
 		<div className={"sg" + (bare ? " sg-bare" : "")}>
 			{!bare && <header className="sg-head">
-				<span className="sg-facts">{facts ?? `${averageSpeed.toFixed(1)} ${speedUnit} ${ko("average", "평균")}`}</span>
+				<span className="sg-facts">{facts ?? `${averageSpeed.toFixed(1)} ${speedUnit} ${ko("average", "평균", "平均")}`}</span>
 				<span className="tl-path-hint">
-					{ko("drag the curve · double-click or the button cuts · Delete removes a cut", "곡선을 끌어 조절 · 더블클릭이나 버튼으로 컷 · 컷 선택 후 Delete로 삭제")}
+					{ko("drag the curve · double-click or the button cuts · Delete removes a cut", "곡선을 끌어 조절 · 더블클릭이나 버튼으로 컷 · 컷 선택 후 Delete로 삭제", "拖曲线调节 · 双击或按钮切开 · 选中剪辑点后按 Delete 删除")}
 				</span>
 				<button
 					type="button"
 					className="tl-camera-tool"
 					disabled={!canCutAtPlayhead}
-					title={ko("Pin the instant at the playhead: the spot being walked then never moves again", "재생 위치의 순간을 고정합니다 — 그때 지나는 자리는 다시 움직이지 않습니다")}
+					title={ko("Pin the instant at the playhead: the spot being walked then never moves again", "재생 위치의 순간을 고정합니다 — 그때 지나는 자리는 다시 움직이지 않습니다", "钉住播放头这一瞬：当时踩过的位置不会再动")}
 					onClick={() => addCutAt(playheadU)}
 				>
-					{ko("Cut at playhead", "재생 위치에 컷")}
+					{ko("Cut at playhead", "재생 위치에 컷", "在播放头处切开")}
 				</button>
 				{hasCurve && (
 					<button
 						type="button"
 						className="tl-camera-tool danger"
-						title={ko("Back to constant speed — clears the curve and every cut", "등속으로 되돌립니다 — 곡선과 컷을 모두 지웁니다")}
+						title={ko("Back to constant speed — clears the curve and every cut", "등속으로 되돌립니다 — 곡선과 컷을 모두 지웁니다", "回到匀速 — 会清掉曲线和所有剪辑点")}
 						onClick={() => {
 							setSelectedCut(null);
 							commit(flatTiming(), { gesture: true });
 						}}
 					>
-						{ko("Reset curve", "곡선 초기화")}
+						{ko("Reset curve", "곡선 초기화", "重置曲线")}
 					</button>
 				)}
 			</header>}
@@ -639,7 +639,7 @@ function ObjectTravelTrack({ object, frame, frameCount, fps, pathDraw, onPathDra
 		<>
 			<div className="tl-track objmo">
 				<span className="tl-track-label">
-					<span className="tl-subject-kind">{ko("PROP", "소품")}</span>
+					<span className="tl-subject-kind">{ko("PROP", "소품", "道具")}</span>
 					<span className="objmo-name">{object.name}</span>
 				</span>
 				<div className="tl-lane objmo-tools">
@@ -648,42 +648,42 @@ function ObjectTravelTrack({ object, frame, frameCount, fps, pathDraw, onPathDra
 						className={"tl-camera-tool" + (pathDraw ? " active" : "")}
 						onClick={() => onPathDrawToggle?.()}
 					>
-						{pathDraw ? ko("Drawing…", "그리는 중…") : path ? ko("Redraw path", "경로 다시 그리기") : ko("Draw path", "경로 그리기")}
+						{pathDraw ? ko("Drawing…", "그리는 중…", "绘制中…") : path ? ko("Redraw path", "경로 다시 그리기", "重绘路径") : ko("Draw path", "경로 그리기", "绘制路径")}
 					</button>
 					{path ? (
 						<>
-							<span className="objmo-speed" title={ko("Metres per second; 0 spreads the route across the whole take", "초당 미터; 0이면 전체 길이에 맞춰 이동합니다")}>
-								<span>{ko("Speed", "속도")}</span>
+							<span className="objmo-speed" title={ko("Metres per second; 0 spreads the route across the whole take", "초당 미터; 0이면 전체 길이에 맞춰 이동합니다", "米/秒；0 则铺满整条")}>
+								<span>{ko("Speed", "속도", "速度")}</span>
 								<input
 									type="range"
 									min={0}
 									max={20}
 									step={0.1}
-									aria-label={ko("Travel speed", "이동 속도")}
+									aria-label={ko("Travel speed", "이동 속도", "移动速度")}
 									value={path.speed ?? 0}
 									onChange={(event) => patch({ speed: Number(event.currentTarget.value) })}
 								/>
 								<output className="objmo-speed-value">
-									{(path.speed ?? 0) === 0 ? ko("fills take", "전체") : `${Number(path.speed).toFixed(1)} m/s`}
+									{(path.speed ?? 0) === 0 ? ko("fills take", "전체", "整条") : `${Number(path.speed).toFixed(1)} m/s`}
 								</output>
 							</span>
 							<button
 								type="button"
 								className={"tl-camera-tool" + (path.faceTravel ? " active" : "")}
 								aria-pressed={!!path.faceTravel}
-								title={ko("Turn to face the direction of travel", "진행 방향을 바라보게 합니다")}
+								title={ko("Turn to face the direction of travel", "진행 방향을 바라보게 합니다", "转向行进方向")}
 								onClick={() => patch({ faceTravel: !path.faceTravel })}
 							>
-								{path.faceTravel ? ko("Faces travel", "진행 방향 봄") : ko("Fixed facing", "방향 고정")}
+								{path.faceTravel ? ko("Faces travel", "진행 방향 봄", "朝向行进方向") : ko("Fixed facing", "방향 고정", "固定朝向")}
 							</button>
 							<button
 								type="button"
 								className={"tl-camera-tool" + (path.extend ? " active" : "")}
 								aria-pressed={!!path.extend}
-								title={ko("Keep going in the last direction after the route ends", "경로가 끝나도 마지막 방향으로 계속 갑니다")}
+								title={ko("Keep going in the last direction after the route ends", "경로가 끝나도 마지막 방향으로 계속 갑니다", "路径结束后继续朝最后的方向走")}
 								onClick={() => patch({ extend: !path.extend })}
 							>
-								{ko("Keep going", "계속 가기")}
+								{ko("Keep going", "계속 가기", "继续走")}
 							</button>
 							<button
 								type="button"
@@ -691,15 +691,15 @@ function ObjectTravelTrack({ object, frame, frameCount, fps, pathDraw, onPathDra
 								aria-pressed={!!path.loop}
 								onClick={() => patch({ loop: !path.loop })}
 							>
-								{ko("Loop", "반복")}
+								{ko("Loop", "반복", "循环")}
 							</button>
 							<button
 								type="button"
 								className="tl-camera-tool danger"
-								title={ko("Delete this route; the object stands still again", "경로를 지웁니다. 오브젝트는 다시 제자리에 섭니다")}
+								title={ko("Delete this route; the object stands still again", "경로를 지웁니다. 오브젝트는 다시 제자리에 섭니다", "删除这条路径；物体会停在原地")}
 								onClick={() => onPathClear?.()}
 							>
-								{ko("Delete path", "경로 삭제")}
+								{ko("Delete path", "경로 삭제", "删除路径")}
 							</button>
 							{/* The two gestures nobody guesses, on the same row rather than
 							    a lane of their own — an empty track reads as broken. */}
@@ -707,22 +707,23 @@ function ObjectTravelTrack({ object, frame, frameCount, fps, pathDraw, onPathDra
 								{ko(
 									`${metrics.length.toFixed(1)} m · ${path.points.length} points · double-click the line to add a point · Delete removes it`,
 									`${metrics.length.toFixed(1)} m · 점 ${path.points.length}개 · 선을 더블클릭하면 점 추가 · Delete로 삭제`,
+									`${metrics.length.toFixed(1)} m · ${path.points.length} 个点 · 双击线段加点 · Delete 删除`,
 								)}
 							</span>
 						</>
 					) : (
 						<span className="tl-path-hint">
-							{ko("Draw a route on the Top-View map to make this prop travel.", "위에서 본 지도에 경로를 그리면 이 소품이 이동합니다.")}
+							{ko("Draw a route on the Top-View map to make this prop travel.", "위에서 본 지도에 경로를 그리면 이 소품이 이동합니다.", "在顶视图地图上画路径，这个道具就会沿路走。")}
 						</span>
 					)}
 				</div>
 			</div>
 			{path && span && (
 				<div className="tl-track objmo sg-row">
-					<span className="tl-track-label">{ko("Speed", "속도 곡선")}</span>
+					<span className="tl-track-label">{ko("Speed", "속도 곡선", "速度")}</span>
 					<div className="tl-lane sg-lane">
 						<SpeedGraph
-							facts={metrics && span ? `${metrics.length.toFixed(1)} m · ${seconds.toFixed(1)}${isKo ? "초" : "s"}` : null}
+							facts={metrics && span ? `${metrics.length.toFixed(1)} m · ${seconds.toFixed(1)}${ko("s", "초", "秒")}` : null}
 							timing={path.timing ?? null}
 							windowFrac={span.fills ? 1 : span.end / Math.max(1, frameCount - 1)}
 							frame={frame}
@@ -770,47 +771,47 @@ function CameraBlockEditor({
 	const numberValue = (event) => Number(event.currentTarget.value);
 	const metric = (value, places = 1) => Number(value).toFixed(places);
 	return (
-		<section className="tl-camera-editor" aria-label={ko(`Camera controls for ${shot.name}`, `${shot.name} 카메라 컨트롤`)}>
+		<section className="tl-camera-editor" aria-label={ko(`Camera controls for ${shot.name}`, `${shot.name} 카메라 컨트롤`, `${shot.name} 相机控制`)}>
 			<strong className="tl-camera-editor-title">
-				<span className="tl-subject-kind">{ko("CAMERA", "카메라")}</span>
+				<span className="tl-subject-kind">{ko("CAMERA", "카메라", "相机")}</span>
 				{shot.name}
 			</strong>
 			{blocked ? (
 				<span className="tl-camera-blocked">
-					{ko("Turn Waypoint off to edit or preview this camera.", "카메라를 편집하거나 미리 보려면 Waypoint를 꺼주세요.")}
+					{ko("Turn Waypoint off to edit or preview this camera.", "카메라를 편집하거나 미리 보려면 Waypoint를 꺼주세요.", "要编辑或预览这台相机，请先关掉 Waypoint。")}
 					<button type="button" className="tl-camera-tool" onClick={() => onWaypointToggle?.()}>
-						{ko("Turn Waypoint off", "Waypoint 끄기")}
+						{ko("Turn Waypoint off", "Waypoint 끄기", "关闭 Waypoint")}
 					</button>
 				</span>
 			) : (
 				<>
 					<button type="button" className={"tl-camera-tool" + (previewing ? " active" : "")} onClick={() => onPreview?.()}>
-						{previewing ? ko("Stop", "정지") : ko("Preview", "미리보기")}
+						{previewing ? ko("Stop", "정지", "停止") : ko("Preview", "미리보기", "预览")}
 					</button>
 					<button type="button" className={"tl-camera-tool" + (railDraw ? " active" : "")} onClick={() => onRailDrawToggle?.()}>
-						{railDraw ? ko("Drawing…", "그리는 중…") : railLength != null ? ko("Redraw rail", "레일 다시 그리기") : ko("Draw rail", "레일 그리기")}
+						{railDraw ? ko("Drawing…", "그리는 중…", "绘制中…") : railLength != null ? ko("Redraw rail", "레일 다시 그리기", "重绘轨道") : ko("Draw rail", "레일 그리기", "绘制轨道")}
 					</button>
 
 					{curve && (
-						<span className="cam-mode-switch" role="group" aria-label={ko("Shot curve", "샷 곡선")}>
+						<span className="cam-mode-switch" role="group" aria-label={ko("Shot curve", "샷 곡선", "镜头曲线")}>
 							<button
 								type="button"
 								className={"tl-camera-tool" + (curve.mode === "speed" ? " active" : "")}
 								aria-pressed={curve.mode === "speed"}
-								title={ko("Draw dolly speed in the Shot box", "샷 박스에 돌리 속도를 그립니다")}
+								title={ko("Draw dolly speed in the Shot box", "샷 박스에 돌리 속도를 그립니다", "在镜头块里画推轨速度")}
 								onClick={() => curve.onModeChange?.("speed")}
 							>
-								{ko("Speed", "속도")}
+								{ko("Speed", "속도", "速度")}
 							</button>
 							<button
 								type="button"
 								className={"tl-camera-tool" + (curve.mode === "height" ? " active" : "")}
 								aria-pressed={curve.mode === "height"}
 								disabled={!curve.hasCrane}
-								title={ko("Draw crane height in the Shot box", "샷 박스에 크레인 높이를 그립니다")}
+								title={ko("Draw crane height in the Shot box", "샷 박스에 크레인 높이를 그립니다", "在镜头块里画摇臂高度")}
 								onClick={() => curve.onModeChange?.("height")}
 							>
-								{ko("Height", "높이")}
+								{ko("Height", "높이", "高度")}
 							</button>
 						</span>
 					)}
@@ -819,41 +820,41 @@ function CameraBlockEditor({
 							{curve.canCut && <button
 								type="button"
 								className="tl-camera-tool"
-								title={ko("Pin the instant at the playhead: the spot being passed then never moves again", "재생 위치의 순간을 고정합니다 — 그때 지나는 자리는 다시 움직이지 않습니다")}
+								title={ko("Pin the instant at the playhead: the spot being passed then never moves again", "재생 위치의 순간을 고정합니다 — 그때 지나는 자리는 다시 움직이지 않습니다", "钉住播放头这一瞬：当时经过的位置不会再动")}
 								onClick={() => curve.onCut?.()}
 							>
-								{ko("Cut", "컷")}
+								{ko("Cut", "컷", "剪辑")}
 							</button>}
 							{curve.canReset && <button
 								type="button"
 								className="tl-camera-tool danger"
-								title={ko("Back to constant speed — clears the curve and every cut", "등속으로 되돌립니다 — 곡선과 컷을 모두 지웁니다")}
+								title={ko("Back to constant speed — clears the curve and every cut", "등속으로 되돌립니다 — 곡선과 컷을 모두 지웁니다", "回到匀速 — 会清掉曲线和所有剪辑点")}
 								onClick={() => curve.onReset?.()}
 							>
-								{ko("Reset curve", "곡선 초기화")}
+								{ko("Reset curve", "곡선 초기화", "重置曲线")}
 							</button>}
 						</>
 					)}
 
-					<label title={ko("Read automatically from the camera position", "현재 카메라 위치에서 자동으로 읽습니다")}>
-						<span>{ko("Distance", "거리")}</span>
+					<label title={ko("Read automatically from the camera position", "현재 카메라 위치에서 자동으로 읽습니다", "从当前相机位置自动读取")}>
+						<span>{ko("Distance", "거리", "距离")}</span>
 						<output className="tl-camera-metric">{metric(follow.distance, 2)}</output>
 						<small>m</small>
 					</label>
-					<label title={ko("Cap dolly travel speed", "돌리의 최고 이동 속도를 제한합니다")}>
-						<span>{ko("Speed", "속도")}</span>
+					<label title={ko("Cap dolly travel speed", "돌리의 최고 이동 속도를 제한합니다", "限制推轨最高速度")}>
+						<span>{ko("Speed", "속도", "速度")}</span>
 						<input type="number" min="0.2" max="8" step="0.1" value={follow.maxDollySpeed} onChange={(event) => patchFollow({ maxDollySpeed: numberValue(event) })} />
 						<small>m/s</small>
 					</label>
 					{!(mode === "rail" && crane) && (
-						<label title={ko("Read automatically from the camera position", "현재 카메라 위치에서 자동으로 읽습니다")}>
-							<span>{ko("Height", "높이")}</span>
+						<label title={ko("Read automatically from the camera position", "현재 카메라 위치에서 자동으로 읽습니다", "从当前相机位置自动读取")}>
+							<span>{ko("Height", "높이", "高度")}</span>
 							<output className="tl-camera-metric">{metric(follow.height, 2)}</output>
 							<small>m</small>
 						</label>
 					)}
-					<label title={ko("Read automatically from the camera tilt", "현재 카메라 틸트에서 자동으로 읽습니다")}>
-						<span>{ko("Pitch", "피치")}</span>
+					<label title={ko("Read automatically from the camera tilt", "현재 카메라 틸트에서 자동으로 읽습니다", "从当前相机俯仰自动读取")}>
+						<span>{ko("Pitch", "피치", "俯仰")}</span>
 						<output className="tl-camera-metric">{signedValue(follow.pitchOffsetDeg)}</output>
 						<small>°</small>
 					</label>
@@ -866,29 +867,29 @@ function CameraBlockEditor({
 						};
 						return (
 							<>
-								<label title={ko("Lens height of the selected crane point — click a purple dot in the scene to pick one, double-click the lifted curve to add one", "선택한 크레인 점의 렌즈 높이 — 씬의 보라 점을 클릭해 선택, 커브 더블클릭으로 추가")}>
-									<span>{ko("Point height", "점 높이")}</span>
+								<label title={ko("Lens height of the selected crane point — click a purple dot in the scene to pick one, double-click the lifted curve to add one", "선택한 크레인 점의 렌즈 높이 — 씬의 보라 점을 클릭해 선택, 커브 더블클릭으로 추가", "选中摇臂点的镜头高度 — 在场景里点紫色点来选，双击抬起的曲线可加点")}>
+									<span>{ko("Point height", "점 높이", "点高度")}</span>
 									<input type="number" min="0.1" max="12" step="0.1" value={points[index].height} onChange={(event) => patchPointHeight(numberValue(event))} />
 									<small>m</small>
 								</label>
-								<output className="tl-camera-count" title={ko("Crane points on this rail — click the Shot block's key strip to add one", "이 레일의 크레인 점 개수 — 샷 블록 키 줄을 클릭해 추가")}>{points.length}{ko(" pts", "점")}</output>
+								<output className="tl-camera-count" title={ko("Crane points on this rail — click the Shot block's key strip to add one", "이 레일의 크레인 점 개수 — 샷 블록 키 줄을 클릭해 추가", "这条轨道上的摇臂点数 — 点击镜头块的关键帧条可添加")}>{points.length}{ko(" pts", "점", " 点")}</output>
 								{/* Only while a removable point is actually held: a button that
 								    is greyed out nine times in ten is just furniture. */}
 								{curve?.mode === "height" && craneSelectedIndex != null && craneSelectedIndex > 0 && craneSelectedIndex < points.length - 1 && (
 									<button
 										type="button"
 										className="tl-camera-tool danger"
-										title={ko("Remove the selected interior crane point", "선택한 중간 크레인 점을 삭제합니다")}
+										title={ko("Remove the selected interior crane point", "선택한 중간 크레인 점을 삭제합니다", "删除选中的中间摇臂点")}
 										onClick={() => onCranePointDelete?.()}
 									>
-										{ko("Remove point", "점 삭제")}
+										{ko("Remove point", "점 삭제", "删除点")}
 									</button>
 								)}
 							</>
 						);
 					})()}
 					<details className="tl-camera-advanced">
-						<summary>{ko("Advanced", "고급")}</summary>
+						<summary>{ko("Advanced", "고급", "高级")}</summary>
 						{/* Rig behaviour you set once per shot and forget: it belongs where
 						    the other set-once numbers already live, not in the row you
 						    reach across every time you shape a curve. */}
@@ -896,43 +897,43 @@ function CameraBlockEditor({
 							<button
 								type="button"
 								className="tl-camera-tool danger"
-								title={ko("Delete this Shot's rail geometry and return to Follow", "이 샷의 레일 경로를 삭제하고 팔로우로 돌아갑니다")}
+								title={ko("Delete this Shot's rail geometry and return to Follow", "이 샷의 레일 경로를 삭제하고 팔로우로 돌아갑니다", "删除这条镜头的轨道，回到跟随")}
 								onClick={() => onRailDelete?.()}
 							>
-								{ko("Delete rail", "레일 삭제")}
+								{ko("Delete rail", "레일 삭제", "删除轨道")}
 							</button>
 						)}
 						<button
 							type="button"
 							className={"tl-camera-tool" + (mode === "follow" ? " active" : "")}
 							aria-pressed={mode === "follow"}
-							title={ko("Keep the camera at the captured distance from the subject", "카메라와 피사체 사이의 현재 거리를 유지합니다")}
+							title={ko("Keep the camera at the captured distance from the subject", "카메라와 피사체 사이의 현재 거리를 유지합니다", "保持相机与人物的当前距离")}
 							onClick={() => patchCamera({ mode: mode === "follow" ? "keys" : "follow" })}
 						>
-							{mode === "follow" ? ko("Follow On", "팔로우 켜짐") : ko("Follow Off", "팔로우 꺼짐")}
+							{mode === "follow" ? ko("Follow On", "팔로우 켜짐", "跟随开启") : ko("Follow Off", "팔로우 꺼짐", "跟随关闭")}
 						</button>
 						<button
 							type="button"
 							className={"tl-camera-head" + (follow.railStartMode === "head" ? " active" : "")}
 							aria-pressed={follow.railStartMode === "head"}
-							title={ko("Choose whether the dolly starts at the rail head or the nearest useful point", "돌리가 레일 시작점 또는 가까운 지점에서 출발하도록 정합니다")}
+							title={ko("Choose whether the dolly starts at the rail head or the nearest useful point", "돌리가 레일 시작점 또는 가까운 지점에서 출발하도록 정합니다", "设定推轨从轨道起点出发，还是从最近的可用点出发")}
 							onClick={() => patchFollow({ railStartMode: follow.railStartMode === "head" ? "nearest" : "head" })}
 						>
-							{follow.railStartMode === "head" ? ko("Head start", "시작점 출발") : ko("Nearest", "가까운 지점")}
+							{follow.railStartMode === "head" ? ko("Head start", "시작점 출발", "从起点出发") : ko("Nearest", "가까운 지점", "最近点")}
 						</button>
-						<label title={ko("Set how softly the rig catches up", "카메라가 얼마나 부드럽게 따라붙는지 정합니다")}>
-							<span>{ko("Damping", "댐핑")}</span>
+						<label title={ko("Set how softly the rig catches up", "카메라가 얼마나 부드럽게 따라붙는지 정합니다", "设定相机跟上的柔和程度")}>
+							<span>{ko("Damping", "댐핑", "阻尼")}</span>
 							<input type="number" min="0.1" max="3" step="0.05" value={follow.response} onChange={(event) => patchFollow({ response: numberValue(event) })} />
 							<small>s</small>
 						</label>
-						<label title={ko("Aim ahead of subject travel", "피사체 진행 방향을 미리 조준합니다")}>
-							<span>{ko("Look-ahead", "조준 선행")}</span>
+						<label title={ko("Aim ahead of subject travel", "피사체 진행 방향을 미리 조준합니다", "提前瞄准人物行进方向")}>
+							<span>{ko("Look-ahead", "조준 선행", "预瞄")}</span>
 							<input type="number" min="0" max="1" step="0.05" value={follow.lead} onChange={(event) => patchFollow({ lead: numberValue(event) })} />
 							<small>s</small>
 						</label>
 					</details>
 					<span className="tl-camera-slate">
-						{mode === "rail" ? `${ko("Dolly on rail", "레일 돌리")}${railLength == null ? "" : ` · ${railLength.toFixed(1)} m`}` : ko("Camera preview", "카메라 미리보기")}
+						{mode === "rail" ? `${ko("Dolly on rail", "레일 돌리", "轨道推轨")}${railLength == null ? "" : ` · ${railLength.toFixed(1)} m`}` : ko("Camera preview", "카메라 미리보기", "相机预览")}
 					</span>
 				</>
 			)}
@@ -1716,16 +1717,16 @@ export default function Timeline({
 	};
 
 	return (
-		<section className={"timeline" + (expanded ? "" : " collapsed") + (!shots.length ? " empty-shots" : "")} aria-label={ko("Animation timeline", "애니메이션 타임라인")}>
+		<section className={"timeline" + (expanded ? "" : " collapsed") + (!shots.length ? " empty-shots" : "")} aria-label={ko("Animation timeline", "애니메이션 타임라인", "动画时间轴")}>
 			{expanded ? (
 				<>
 					<div className="tl-head">
-						<div className="tl-transport" aria-label={ko("Playback transport", "재생 컨트롤")}>
+						<div className="tl-transport" aria-label={ko("Playback transport", "재생 컨트롤", "播放控制")}>
 							<button
 								type="button"
 								className="tl-btn"
-								aria-label={ko("Previous frame", "이전 프레임")}
-								title={ko("Previous frame (k)", "이전 프레임 (k)")}
+								aria-label={ko("Previous frame", "이전 프레임", "上一帧")}
+								title={ko("Previous frame (k)", "이전 프레임 (k)", "上一帧 (k)")}
 								onClick={() => handlers.current.onStep?.(-1)}
 							>
 								‹
@@ -1733,8 +1734,8 @@ export default function Timeline({
 							<button
 								type="button"
 								className={"tl-btn play" + (playing ? " on" : "")}
-								aria-label={playing ? ko("Pause playback", "재생 일시중지") : ko("Play playback", "재생 시작")}
-								title={ko("Play / pause (Space)", "재생/일시중지 (Space)")}
+								aria-label={playing ? ko("Pause playback", "재생 일시중지", "暂停播放") : ko("Play playback", "재생 시작", "开始播放")}
+								title={ko("Play / pause (Space)", "재생/일시중지 (Space)", "播放/暂停 (Space)")}
 								onClick={() => handlers.current.onPlayToggle?.()}
 							>
 								{playing ? "❚❚" : "▶"}
@@ -1742,8 +1743,8 @@ export default function Timeline({
 							<button
 								type="button"
 								className="tl-btn"
-								aria-label={ko("Next frame", "다음 프레임")}
-								title={ko("Next frame (j)", "다음 프레임 (j)")}
+								aria-label={ko("Next frame", "다음 프레임", "下一帧")}
+								title={ko("Next frame (j)", "다음 프레임 (j)", "下一帧 (j)")}
 								onClick={() => handlers.current.onStep?.(1)}
 							>
 								›
@@ -1752,12 +1753,12 @@ export default function Timeline({
 								<b>{frame}</b> / {Math.max(0, frameCount - 1)} · {formatTimelineSeconds(frame / Math.max(1, fps))} / {formatTimelineSeconds(frameCount / Math.max(1, fps))} · {fps} fps · {playbackSpeed.toFixed(2)}×
 							</span>
 						</div>
-						<div className="tl-head-group tl-view-tools" role="group" aria-label={ko("Timeline view tools", "타임라인 보기 도구")} style={TL_HEAD_GROUP_STYLE}>
+						<div className="tl-head-group tl-view-tools" role="group" aria-label={ko("Timeline view tools", "타임라인 보기 도구", "时间轴视图工具")} style={TL_HEAD_GROUP_STYLE}>
 							<button
 								type="button"
 								className={"tl-btn zoom" + (zoom !== ZOOM_DEFAULT ? " on" : "")}
-								aria-label={ko("Timeline zoom", "타임라인 확대 비율")}
-								title={ko("Two-finger up/down over FRAME ruler to zoom — click to reset to 1×", "프레임 눈금 위에서 두 손가락으로 위아래 스크롤해 확대/축소 · 클릭하면 1×로 초기화")}
+								aria-label={ko("Timeline zoom", "타임라인 확대 비율", "时间轴缩放")}
+								title={ko("Two-finger up/down over FRAME ruler to zoom — click to reset to 1×", "프레임 눈금 위에서 두 손가락으로 위아래 스크롤해 확대/축소 · 클릭하면 1×로 초기화", "在帧尺上双指上下滑动缩放 — 点击重置为 1×")}
 								onClick={resetZoom}
 							>
 								{zoom.toFixed(2)}×
@@ -1766,58 +1767,58 @@ export default function Timeline({
 								type="button"
 								className={"tl-btn wp" + (waypointMode ? " on" : "")}
 								aria-pressed={waypointMode}
-								aria-label={ko("Root path mode", "루트 경로 모드")}
-								title={ko("Enable or disable 2D Root path constraints (P)", "2D 루트 경로 제약 켜기/끄기 (P)")}
+								aria-label={ko("Root path mode", "루트 경로 모드", "根路径模式")}
+								title={ko("Enable or disable 2D Root path constraints (P)", "2D 루트 경로 제약 켜기/끄기 (P)", "开/关 2D 根路径约束 (P)")}
 								onClick={() => handlers.current.onWaypointToggle?.()}
 							>
-								{isKo ? `웨이포인트 ${waypointMode ? "켜짐" : "꺼짐"}` : `Waypoint ${waypointMode ? "on" : "off"}`}
+								{ko(`Waypoint ${waypointMode ? "on" : "off"}`, `웨이포인트 ${waypointMode ? "켜짐" : "꺼짐"}`, `路径点${waypointMode ? "开" : "关"}`)}
 							</button>}
 						</div>
-						<div className="tl-head-group tl-pose-tools" role="group" aria-label={ko("Pose correction tools", "포즈 보정 도구")} style={TL_HEAD_GROUP_STYLE}>
+						<div className="tl-head-group tl-pose-tools" role="group" aria-label={ko("Pose correction tools", "포즈 보정 도구", "姿势修正工具")} style={TL_HEAD_GROUP_STYLE}>
 							<button
 								type="button"
 								className={"tl-btn ik" + (ikMode ? " on" : "")}
 								aria-pressed={ikMode}
 								disabled={ikDisabled && !ikMode}
-								aria-label={ko("Inverse kinematics", "역운동학")}
-								title={ikDisabled && !ikMode ? ko("IK needs Subject 1's rig loaded", "IK를 사용하려면 인물 1의 리그를 먼저 불러와야 해요") : ko("IK mode — drag a wrist / ankle handle; keys land on the Full-Body lane. With a motion loaded, keys correct it layer-style", "IK 모드 — 손목이나 발목 핸들을 드래그하세요. 키는 전신 레인에 찍히며, 모션을 불러온 뒤에는 레이어 방식으로 보정합니다")}
+								aria-label={ko("Inverse kinematics", "역운동학", "逆向运动学")}
+								title={ikDisabled && !ikMode ? ko("IK needs Subject 1's rig loaded", "IK를 사용하려면 인물 1의 리그를 먼저 불러와야 해요", "要用 IK，请先载入人物 1 的绑定") : ko("IK mode — drag a wrist / ankle handle; keys land on the Full-Body lane. With a motion loaded, keys correct it layer-style", "IK 모드 — 손목이나 발목 핸들을 드래그하세요. 키는 전신 레인에 찍히며, 모션을 불러온 뒤에는 레이어 방식으로 보정합니다", "IK 模式 — 拖手腕或脚踝手柄；关键帧落在 Full-Body 轨道。载入动作后，关键帧会像图层一样修正它")}
 								onClick={() => handlers.current.onIkToggle?.()}
 							>
-								{isKo ? `IK ${ikMode ? "켜짐" : "꺼짐"}` : `IK ${ikMode ? "on" : "off"}`}
+								{ko(`IK ${ikMode ? "on" : "off"}`, `IK ${ikMode ? "켜짐" : "꺼짐"}`, `IK ${ikMode ? "开" : "关"}`)}
 							</button>
 							<button
 								type="button"
 								className={"tl-btn ik snap" + (footSnap ? " on" : "")}
 								aria-pressed={footSnap}
-								aria-label={ko("Foot snap", "발 스냅")}
-								title={ko("Foot snap — keep the feet planted while you move the body (hips); the knees bend instead of the feet sinking through the floor", "발 스냅 — 몸(엉덩이)을 움직여도 발을 바닥에 고정합니다. 발이 바닥으로 가라앉는 대신 무릎이 구부러집니다")}
+								aria-label={ko("Foot snap", "발 스냅", "脚吸附")}
+								title={ko("Foot snap — keep the feet planted while you move the body (hips); the knees bend instead of the feet sinking through the floor", "발 스냅 — 몸(엉덩이)을 움직여도 발을 바닥에 고정합니다. 발이 바닥으로 가라앉는 대신 무릎이 구부러집니다", "脚吸附 — 挪身体（髋）时脚钉在地上；膝盖会弯，脚不会沉进地面")}
 								onClick={() => handlers.current.onFootSnapToggle?.()}
 							>
-								{isKo ? `스냅 ${footSnap ? "켜짐" : "꺼짐"}` : `Snap ${footSnap ? "on" : "off"}`}
+								{ko(`Snap ${footSnap ? "on" : "off"}`, `스냅 ${footSnap ? "켜짐" : "꺼짐"}`, `吸附${footSnap ? "开" : "关"}`)}
 							</button>
 							<button
 								type="button"
 								className={"tl-btn ik contact" + (bodyContact ? " on" : "")}
 								aria-pressed={bodyContact}
-								aria-label={ko("Body contact", "바닥 접촉")}
-								title={ko("Body contact — keep hands, knees, feet, head, and hips above the floor", "바닥 접촉 — 손, 무릎, 발, 머리, 엉덩이가 바닥 아래로 내려가지 않게 합니다")}
+								aria-label={ko("Body contact", "바닥 접촉", "贴地")}
+								title={ko("Body contact — keep hands, knees, feet, head, and hips above the floor", "바닥 접촉 — 손, 무릎, 발, 머리, 엉덩이가 바닥 아래로 내려가지 않게 합니다", "贴地 — 让手、膝、脚、头和髋不要沉到地面以下")}
 								onClick={() => handlers.current.onBodyContactToggle?.()}
 							>
-								{isKo ? `바닥 접촉 ${bodyContact ? "켜짐" : "꺼짐"}` : `Body contact ${bodyContact ? "on" : "off"}`}
+								{ko(`Body contact ${bodyContact ? "on" : "off"}`, `바닥 접촉 ${bodyContact ? "켜짐" : "꺼짐"}`, `身体接触${bodyContact ? "开" : "关"}`)}
 							</button>
 						</div>
 						{(selectedMotionSegment || onClearMotion) && (
-							<div className="tl-head-group tl-motion-tools" role="group" aria-label={ko("Motion controls", "모션 컨트롤")} style={TL_HEAD_GROUP_STYLE}>
+							<div className="tl-head-group tl-motion-tools" role="group" aria-label={ko("Motion controls", "모션 컨트롤", "动作控制")} style={TL_HEAD_GROUP_STYLE}>
 								{selectedMotionSegment && (
 									<label className="tl-motion-speed-editor">
-										<span>{ko(`Segment ${motionSegments.indexOf(selectedMotionSegment) + 1} speed`, `구간 ${motionSegments.indexOf(selectedMotionSegment) + 1} 배율`)}</span>
+										<span>{ko(`Segment ${motionSegments.indexOf(selectedMotionSegment) + 1} speed`, `구간 ${motionSegments.indexOf(selectedMotionSegment) + 1} 배율`, `区间 ${motionSegments.indexOf(selectedMotionSegment) + 1} 倍率`)}</span>
 										<input
 											type="range"
 											min="0.1"
 											max="4"
 											step="0.1"
 											value={selectedMotionSegment.speed}
-											aria-label={ko("Selected Full-Body segment speed", "선택한 전신 구간 배율")}
+											aria-label={ko("Selected Full-Body segment speed", "선택한 전신 구간 배율", "选中的 Full-Body 区间速率")}
 											onChange={(event) => changeSelectedMotionSpeed(event.currentTarget.valueAsNumber)}
 										/>
 										<input
@@ -1826,7 +1827,7 @@ export default function Timeline({
 											max="4"
 											step="0.1"
 											value={selectedMotionSegment.speed}
-											aria-label={ko("Selected Full-Body segment speed value", "선택한 전신 구간 배율 값")}
+											aria-label={ko("Selected Full-Body segment speed value", "선택한 전신 구간 배율 값", "选中的 Full-Body 区间速率值")}
 											onChange={(event) => changeSelectedMotionSpeed(event.currentTarget.valueAsNumber)}
 										/>
 										<small>×</small>
@@ -1836,11 +1837,11 @@ export default function Timeline({
 									<button
 										type="button"
 										className="tl-btn clear"
-										aria-label={ko("Clear loaded motion", "불러온 모션 지우기")}
-										title={ko("Clear motion and restore the blocking pose", "모션을 지우고 블로킹 포즈로 되돌리기")}
+										aria-label={ko("Clear loaded motion", "불러온 모션 지우기", "清除已载入的动作")}
+										title={ko("Clear motion and restore the blocking pose", "모션을 지우고 블로킹 포즈로 되돌리기", "清除动作并回到走位姿势")}
 										onClick={onClearMotion}
 									>
-										✕ {ko("Clear motion", "모션 지우기")}
+										✕ {ko("Clear motion", "모션 지우기", "清除动作")}
 									</button>
 								)}
 							</div>
@@ -1848,18 +1849,23 @@ export default function Timeline({
 						{waypointMode && (
 							<span className={"tl-wp-hint" + (waypointFrames.length < 2 || pathSpeed?.warn ? " warn" : "")}>
 								{waypointFrames.length < 2
-									? ko("Click the set floor in the Shot view to drop waypoints", "샷 뷰의 세트 바닥을 클릭해 웨이포인트를 놓으세요")
-									: isKo
-										? `루트 웨이포인트 ${waypointFrames.length}개` +
-											(pathSpeed
-												? ` · ${pathSpeed.min.toFixed(1)}–${pathSpeed.max.toFixed(1)} m/s${pathSpeed.warn ? " — 자연스러운 이동 속도 0.5–3 m/s 범위를 벗어남" : ""}`
-												: "") +
-											" · 세트 바닥을 클릭해 더 추가"
-										: `${waypointFrames.length} root waypoints` +
+									? ko("Click the set floor in the Shot view to drop waypoints", "샷 뷰의 세트 바닥을 클릭해 웨이포인트를 놓으세요", "在镜头视图的场地地面上点击放置路径点")
+									: ko(
+										`${waypointFrames.length} root waypoints` +
 											(pathSpeed
 												? ` · ${pathSpeed.min.toFixed(1)}–${pathSpeed.max.toFixed(1)} m/s${pathSpeed.warn ? " — outside the natural 0.5–3 m/s locomotion band" : ""}`
 												: "") +
-											" · click the set floor to add more"}
+											" · click the set floor to add more",
+										`루트 웨이포인트 ${waypointFrames.length}개` +
+											(pathSpeed
+												? ` · ${pathSpeed.min.toFixed(1)}–${pathSpeed.max.toFixed(1)} m/s${pathSpeed.warn ? " — 자연스러운 이동 속도 0.5–3 m/s 범위를 벗어남" : ""}`
+												: "") +
+											" · 세트 바닥을 클릭해 더 추가",
+										`根路径点 ${waypointFrames.length} 个` +
+											(pathSpeed
+												? ` · ${pathSpeed.min.toFixed(1)}–${pathSpeed.max.toFixed(1)} m/s${pathSpeed.warn ? " — 超出自然移动速度 0.5–3 m/s" : ""}`
+												: "") +
+											" · 点击场地地面继续添加")}
 							</span>
 						)}
 						{badge && <span className={"tl-badge " + badge.kind}>{badge.label}</span>}
@@ -1867,8 +1873,8 @@ export default function Timeline({
 							type="button"
 							className="tl-toggle"
 							aria-expanded="true"
-							aria-label={ko("Collapse timeline", "타임라인 접기")}
-							title={ko("Collapse timeline", "타임라인 접기")}
+							aria-label={ko("Collapse timeline", "타임라인 접기", "收起时间轴")}
+							title={ko("Collapse timeline", "타임라인 접기", "收起时间轴")}
 							onClick={() => setExpanded(false)}
 						>
 							▾
@@ -1895,12 +1901,12 @@ export default function Timeline({
 					<div className="tl-body" ref={bodyRef}>
 						<div className={"tl-surface" + (!shots.length ? " empty-shots" : "")} style={{ "--tl-zoom": surfaceZoom }}>
 						<div className="tl-ruler">
-							<span className="tl-ruler-label">{ko("Frame", "프레임")}</span>
+							<span className="tl-ruler-label">{ko("Frame", "프레임", "帧")}</span>
 							<div
 								className="tl-ruler-lane"
 								ref={rulerRef}
 								role="slider"
-								aria-label={ko("Scrub timeline", "타임라인 탐색")}
+								aria-label={ko("Scrub timeline", "타임라인 탐색", "刮扫时间轴")}
 								aria-valuemin={0}
 								aria-valuemax={frameCount - 1}
 								aria-valuenow={frame}
@@ -1956,30 +1962,30 @@ export default function Timeline({
 									{name === "2D Root" && pathSpeed && (
 										<em
 											className={"tl-path-speed" + (pathSpeed.warn ? " warn" : "")}
-											title={isKo ? `핀 구간 속도 ${pathSpeed.min.toFixed(1)}~${pathSpeed.max.toFixed(1)} m/s — 자연 보행은 0.8~1.2 m/s` : `Leg speeds ${pathSpeed.min.toFixed(1)}–${pathSpeed.max.toFixed(1)} m/s — natural gait is 0.8–1.2 m/s`}
+											title={ko(`Leg speeds ${pathSpeed.min.toFixed(1)}–${pathSpeed.max.toFixed(1)} m/s — natural gait is 0.8–1.2 m/s`, `핀 구간 속도 ${pathSpeed.min.toFixed(1)}~${pathSpeed.max.toFixed(1)} m/s — 자연 보행은 0.8~1.2 m/s`, `钉点区间速度 ${pathSpeed.min.toFixed(1)}–${pathSpeed.max.toFixed(1)} m/s — 自然步态约 0.8–1.2 m/s`)}
 										>
 											{pathSpeed.min === pathSpeed.max
 												? `${pathSpeed.min.toFixed(1)} m/s`
 												: `${pathSpeed.min.toFixed(1)}–${pathSpeed.max.toFixed(1)} m/s`}
 										</em>
 									)}
-									{advancedMode && name === "Prompts" && <button className="tl-track-add" type="button" title={ko("Add a 2–4 second prompt clip — one action per block", "2–4초 프롬프트 클립 추가 — 한 블록에 한 동작")} onClick={() => handlers.current.onPromptAdd?.(frame)}>+</button>}
+									{advancedMode && name === "Prompts" && <button className="tl-track-add" type="button" title={ko("Add a 2–4 second prompt clip — one action per block", "2–4초 프롬프트 클립 추가 — 한 블록에 한 동작", "添加 2–4 秒提示词片段 — 一块一个动作")} onClick={() => handlers.current.onPromptAdd?.(frame)}>+</button>}
 									{name === SHOTS_LANE && (
 										<button
 											type="button"
 											className="tl-track-add cut"
 											disabled={shotCutDisabled}
-											title={ko("Add a 2 second shot without changing existing shots", "기존 샷을 바꾸지 않고 2초 샷 추가")}
+											title={ko("Add a 2 second shot without changing existing shots", "기존 샷을 바꾸지 않고 2초 샷 추가", "添加一条 2 秒镜头，不改现有镜头")}
 											onClick={() => handlers.current.onShotCut?.()}
 										>
-											{ko("+ Add shot", "+ 샷 추가")}
+											{ko("+ Add shot", "+ 샷 추가", "+ 添加镜头")}
 										</button>
 									)}
 									{name === IK_LANE && ikMode && (
 										<button
 											className="tl-track-add ik"
 											type="button"
-											title={isKo ? `현재 포즈를 ${frame}프레임에 키로 저장` : `Key the current pose at frame ${frame}`}
+											title={ko(`Key the current pose at frame ${frame}`, `현재 포즈를 ${frame}프레임에 키로 저장`, `把当前姿势存到第 ${frame} 帧`)}
 											onClick={() => handlers.current.onIkKeyframeAdd?.()}
 										>
 											+
@@ -1990,10 +1996,10 @@ export default function Timeline({
 											className="tl-track-add motion-cut"
 											type="button"
 											disabled={frame <= 0 || frame >= motion.frames}
-											title={ko("Cut the Full-Body clip at the playhead", "재생 헤드에서 전신 클립 컷")}
+											title={ko("Cut the Full-Body clip at the playhead", "재생 헤드에서 전신 클립 컷", "在播放头处切开 Full-Body 片段")}
 											onClick={() => handlers.current.onMotionCut?.()}
 										>
-											{ko("Cut", "컷")}
+											{ko("Cut", "컷", "剪辑")}
 										</button>
 									)}
 								</span>
@@ -2013,7 +2019,7 @@ export default function Timeline({
 									))}
 									{name === SHOTS_LANE && shots.length === 0 && (
 										<div className="tl-shot-empty">
-											<span>{ko("No shots yet — use + Add shot in the lane header to create one.", "아직 샷이 없습니다 — 레인 헤더의 + 샷 추가로 만들어 보세요.")}</span>
+											<span>{ko("No shots yet — use + Add shot in the lane header to create one.", "아직 샷이 없습니다 — 레인 헤더의 + 샷 추가로 만들어 보세요.", "还没有镜头 — 用时间轨标题里的 + 添加镜头来创建。")}</span>
 										</div>
 									)}
 									{name === SHOTS_LANE && shots.map((shot, index) => {
@@ -2053,7 +2059,7 @@ export default function Timeline({
 												key={shot.id}
 												className={"tl-shot-block" + (index === cameraBlockIdx ? " selected" : "") + (index === activeShotIdx ? " active" : "") + (movingShotId === shot.id ? " moving" : "") + (!railOff && railRange && railLengthByShot.has(shot.id) ? " has-dolly" : "")}
 												style={{ "--tl-f-start": geometry.startPct, "--tl-f-end": geometry.endPct }}
-												title={isKo ? `${shot.name} · ${shot.startFrame}–${lastFrame}프레임 · 드래그해 순서 이동, 양끝으로 컷 조절, 아래 빈 줄을 클릭해 카메라 키 추가` : `${shot.name} · frames ${shot.startFrame}–${lastFrame} · drag to reorder, trim cuts at either edge, click the empty lower strip to add a camera key`}
+												title={ko(`${shot.name} · frames ${shot.startFrame}–${lastFrame} · drag to reorder, trim cuts at either edge, click the empty lower strip to add a camera key`, `${shot.name} · ${shot.startFrame}–${lastFrame}프레임 · 드래그해 순서 이동, 양끝으로 컷 조절, 아래 빈 줄을 클릭해 카메라 키 추가`, `${shot.name} · 第 ${shot.startFrame}–${lastFrame} 帧 · 拖动改顺序，两端调剪辑，点击下方空条添加相机关键帧`)}
 												onPointerDown={(e) => beginShotMove(e, shot, index)}
 												onPointerMove={moveShot}
 												onPointerUp={endShotMove}
@@ -2064,7 +2070,7 @@ export default function Timeline({
 												<button
 														type="button"
 														className="tl-shot-edge start"
-														aria-label={ko(`Resize start of ${shot.name}`, `${shot.name} 시작점 조절`)}
+														aria-label={ko(`Resize start of ${shot.name}`, `${shot.name} 시작점 조절`, `${shot.name} 起点调节`)}
 														onPointerDown={(e) => beginShotBoundaryDrag(e, index, "start")}
 														onPointerMove={moveShotBoundary}
 														onPointerUp={endShotBoundaryDrag}
@@ -2075,7 +2081,7 @@ export default function Timeline({
 												<button
 													type="button"
 													className="tl-shot-edge end"
-													aria-label={ko(`Resize end of ${shot.name}`, `${shot.name} 끝 길이 조절`)}
+													aria-label={ko(`Resize end of ${shot.name}`, `${shot.name} 끝 길이 조절`, `${shot.name} 终点长度调节`)}
 													onPointerDown={(e) => beginShotBoundaryDrag(e, index, "end")}
 													onPointerMove={moveShotBoundary}
 													onPointerUp={endShotBoundaryDrag}
@@ -2098,7 +2104,7 @@ export default function Timeline({
 												) : (
 													<span className="tl-shot-label">
 														<b>{shot.name}</b>
-														<small>{shot.startFrame}–{lastFrame} · {durationS.toFixed(1)}{ko("s", "초")}</small>
+														<small>{shot.startFrame}–{lastFrame} · {durationS.toFixed(1)}{ko("s", "초", "s")}</small>
 													</span>
 												)}
 												{modelWarnings.length > 0 && (
@@ -2111,9 +2117,9 @@ export default function Timeline({
 													</span>
 												)}
 											<span className="tl-shot-actions">
-												<button type="button" title={ko("Split at the playhead", "재생 헤드에서 분할")} disabled={frame <= shot.startFrame || frame > shot.endFrame} onClick={(e) => { e.stopPropagation(); handlers.current.onShotSplit?.(shot.id); }}>{ko("Split", "분할")}</button>
-												<button type="button" title={ko("Duplicate shot", "샷 복제")} onClick={(e) => { e.stopPropagation(); handlers.current.onShotDuplicate?.(shot.id); }}>{ko("Duplicate", "복제")}</button>
-													<button type="button" title={ko("Delete shot and leave free-camera time", "샷을 지우고 자유 카메라 구간으로 비우기")} onClick={(e) => { e.stopPropagation(); handlers.current.onShotRemove?.(shot.id); }}>{ko("Delete", "삭제")}</button>
+												<button type="button" title={ko("Split at the playhead", "재생 헤드에서 분할", "在播放头处拆分")} disabled={frame <= shot.startFrame || frame > shot.endFrame} onClick={(e) => { e.stopPropagation(); handlers.current.onShotSplit?.(shot.id); }}>{ko("Split", "분할", "拆分")}</button>
+												<button type="button" title={ko("Duplicate shot", "샷 복제", "复制镜头")} onClick={(e) => { e.stopPropagation(); handlers.current.onShotDuplicate?.(shot.id); }}>{ko("Duplicate", "복제", "复制")}</button>
+													<button type="button" title={ko("Delete shot and leave free-camera time", "샷을 지우고 자유 카메라 구간으로 비우기", "删除镜头，留下自由相机时段")} onClick={(e) => { e.stopPropagation(); handlers.current.onShotRemove?.(shot.id); }}>{ko("Delete", "삭제", "删除")}</button>
 												</span>
 												<span className="tl-shot-camera-summary">
 													<span className="tl-camera-block-state">{stateLabel}</span>
@@ -2130,8 +2136,8 @@ export default function Timeline({
 											<div
 												className={"sg-shot" + (cameraCurve === "height" && shot.camera?.craneHeight ? " height" : "")}
 												title={cameraCurve === "height"
-													? ko("Crane height — drag a point, click empty time to add one", "크레인 높이 — 점을 끌어 조절, 빈 시간을 클릭해 추가")
-													: ko("Dolly speed — drag the line; cuts and reset live in the camera bar above", "돌리 속도 — 선을 끌어 조절, 컷·초기화는 위 카메라 바에서")}
+													? ko("Crane height — drag a point, click empty time to add one", "크레인 높이 — 점을 끌어 조절, 빈 시간을 클릭해 추가", "摇臂高度 — 拖点调节，点击空白处加点")
+													: ko("Dolly speed — drag the line; cuts and reset live in the camera bar above", "돌리 속도 — 선을 끌어 조절, 컷·초기화는 위 카메라 바에서", "推轨速度 — 拖这条线；剪辑和重置在上方相机栏")}
 												onPointerDown={(event) => event.stopPropagation()}
 												onClick={(event) => event.stopPropagation()}
 												onDoubleClick={(event) => event.stopPropagation()}
@@ -2177,11 +2183,11 @@ export default function Timeline({
 													type="button"
 													className="tl-shot-key-surface"
 													aria-label={shot.camera?.mode === "rail" && shot.camera?.craneHeight
-														? ko(`Add crane point in ${shot.name}`, `${shot.name}에 크레인 점 추가`)
-														: ko(`Add camera key in ${shot.name}`, `${shot.name}에 카메라 키 추가`)}
+														? ko(`Add crane point in ${shot.name}`, `${shot.name}에 크레인 점 추가`, `在 ${shot.name} 添加摇臂点`)
+														: ko(`Add camera key in ${shot.name}`, `${shot.name}에 카메라 키 추가`, `在 ${shot.name} 添加相机关键帧`)}
 													title={shot.camera?.mode === "rail" && shot.camera?.craneHeight
-														? ko("Click the crane graph to add a point; click a point and drag it to change height", "크레인 그래프를 클릭해 점 추가 · 점을 눌러 끌어 높이 조절")
-														: ko("Click at a frame to store the current camera framing", "프레임 위치를 클릭해 현재 카메라 프레이밍을 저장합니다")}
+														? ko("Click the crane graph to add a point; click a point and drag it to change height", "크레인 그래프를 클릭해 점 추가 · 점을 눌러 끌어 높이 조절", "点击摇臂曲线加点；点住一个点上下拖可改高度")
+														: ko("Click at a frame to store the current camera framing", "프레임 위치를 클릭해 현재 카메라 프레이밍을 저장합니다", "点击某一帧，记下当前相机构图")}
 													onClick={(event) => addShotPointFromBlock(event, shot, index)}
 													onDoubleClick={(event) => event.stopPropagation()}
 												/>
@@ -2201,10 +2207,10 @@ export default function Timeline({
 									{name === "Prompts" && promptClips.map((clip) => {
 										const duration = ((clip.endFrame - clip.startFrame) / Math.max(1, fps)).toFixed(1);
 										return (
-											<div key={clip.id} className={"tl-chip" + (selectedPromptId === clip.id ? " selected" : "") + (movingPromptId === clip.id ? " moving" : "")} style={{ "--tl-f-start": clipPct(clip.startFrame), "--tl-f-end": clipPct(clip.endFrame) }} title={ko("Drag to move · edge handles resize · right-click removes", "드래그로 이동 · 가장자리 핸들로 길이 조절 · 오른쪽 클릭으로 삭제")} onPointerDown={(e) => beginPromptMove(e, clip)} onPointerMove={movePrompt} onPointerUp={endPromptMove} onPointerCancel={endPromptMove} onClick={blockPromptClick} onContextMenu={(e) => { e.preventDefault(); handlers.current.onPromptRemove?.(clip.id); }}>
-												<button className="tl-chip-handle start" type="button" aria-label={ko("Resize prompt start", "프롬프트 시작점 조절")} onPointerDown={(e) => beginPromptResize(e, clip, "start")} onPointerMove={movePromptResize} onPointerUp={endPromptResize} onPointerCancel={endPromptResize} />
-												<input className="tl-chip-input" value={clip.text} placeholder={isKo ? `${duration}초 · 모션 프롬프트` : `${duration}s · motion prompt`} maxLength={500} onFocus={() => handlers.current.onEditGestureStart?.("prompt-text", clip.id)} onChange={(e) => handlers.current.onPromptChange?.(clip.id, e.target.value)} />
-												<button className="tl-chip-handle end" type="button" aria-label={ko("Resize prompt end", "프롬프트 끝점 조절")} onPointerDown={(e) => beginPromptResize(e, clip, "end")} onPointerMove={movePromptResize} onPointerUp={endPromptResize} onPointerCancel={endPromptResize} />
+											<div key={clip.id} className={"tl-chip" + (selectedPromptId === clip.id ? " selected" : "") + (movingPromptId === clip.id ? " moving" : "")} style={{ "--tl-f-start": clipPct(clip.startFrame), "--tl-f-end": clipPct(clip.endFrame) }} title={ko("Drag to move · edge handles resize · right-click removes", "드래그로 이동 · 가장자리 핸들로 길이 조절 · 오른쪽 클릭으로 삭제", "拖动移动 · 边缘手柄改长度 · 右键删除")} onPointerDown={(e) => beginPromptMove(e, clip)} onPointerMove={movePrompt} onPointerUp={endPromptMove} onPointerCancel={endPromptMove} onClick={blockPromptClick} onContextMenu={(e) => { e.preventDefault(); handlers.current.onPromptRemove?.(clip.id); }}>
+												<button className="tl-chip-handle start" type="button" aria-label={ko("Resize prompt start", "프롬프트 시작점 조절", "调整提示词起点")} onPointerDown={(e) => beginPromptResize(e, clip, "start")} onPointerMove={movePromptResize} onPointerUp={endPromptResize} onPointerCancel={endPromptResize} />
+												<input className="tl-chip-input" value={clip.text} placeholder={ko(`${duration}s · motion prompt`, `${duration}초 · 모션 프롬프트`, `${duration}秒 · 动作提示词`)} maxLength={500} onFocus={() => handlers.current.onEditGestureStart?.("prompt-text", clip.id)} onChange={(e) => handlers.current.onPromptChange?.(clip.id, e.target.value)} />
+												<button className="tl-chip-handle end" type="button" aria-label={ko("Resize prompt end", "프롬프트 끝점 조절", "调整提示词终点")} onPointerDown={(e) => beginPromptResize(e, clip, "end")} onPointerMove={movePromptResize} onPointerUp={endPromptResize} onPointerCancel={endPromptResize} />
 											</div>
 										);
 									})}
@@ -2216,9 +2222,10 @@ export default function Timeline({
 												"--tl-f-start": clipPct(trimPreview ? trimPreview.start : Math.min(segment.timelineStart, displayFrameCount)),
 												"--tl-f-end": clipPct(trimPreview ? trimPreview.end + 1 : Math.min(segment.timelineEnd + 1, displayFrameCount)),
 											}}
-											title={segment.preview ? undefined : isKo
-												? `전신 구간 ${index + 1} — ${segment.speed}×. 컷은 재생 헤드에서 · 오른쪽 그립을 끌어 배속 조절 · 우클릭으로 구간 삭제`
-												: `Full-Body segment ${index + 1} — ${segment.speed}×. Cut at the playhead; drag the right grip to retime; right-click to delete`}
+											title={segment.preview ? undefined : ko(
+												`Full-Body segment ${index + 1} — ${segment.speed}×. Cut at the playhead; drag the right grip to retime; right-click to delete`,
+												`전신 구간 ${index + 1} — ${segment.speed}×. 컷은 재생 헤드에서 · 오른쪽 그립을 끌어 배속 조절 · 우클릭으로 구간 삭제`,
+												`全身区间 ${index + 1} — ${segment.speed}×。在播放头切开 · 拖右侧手柄调速 · 右键删除区间`)}
 											onContextMenu={segment.preview ? undefined : (e) => {
 												e.preventDefault();
 												e.stopPropagation();
@@ -2228,7 +2235,7 @@ export default function Timeline({
 											{index === 0 && <button
 												className="tl-motion-clip-handle start"
 												type="button"
-												aria-label={ko("Trim take start", "테이크 시작점 자르기")}
+												aria-label={ko("Trim take start", "테이크 시작점 자르기", "裁切条起点")}
 												onPointerDown={(e) => beginMotionTrim(e, "start")}
 												onPointerMove={moveMotionTrim}
 												onPointerUp={endMotionTrim}
@@ -2243,8 +2250,8 @@ export default function Timeline({
 											{!segment.preview && <button
 												className="tl-motion-clip-handle speed"
 												type="button"
-												aria-label={ko("Retime segment by stretch", "드래그로 구간 배속 조절")}
-												title={ko("Drag — wider is slower, narrower is faster", "드래그 — 늘리면 느리게, 줄이면 빠르게")}
+												aria-label={ko("Retime segment by stretch", "드래그로 구간 배속 조절", "拖动改变区间速率")}
+												title={ko("Drag — wider is slower, narrower is faster", "드래그 — 늘리면 느리게, 줄이면 빠르게", "拖动 — 拉宽更慢，拉窄更快")}
 												onPointerDown={(e) => beginMotionSpeed(e, segment)}
 												onPointerMove={moveMotionSpeed}
 												onPointerUp={endMotionSpeed}
@@ -2253,7 +2260,7 @@ export default function Timeline({
 											{index === displayMotionSegments.length - 1 && <button
 												className="tl-motion-clip-handle end"
 												type="button"
-												aria-label={ko("Trim take end", "테이크 끝점 자르기")}
+												aria-label={ko("Trim take end", "테이크 끝점 자르기", "裁切条终点")}
 												onPointerDown={(e) => beginMotionTrim(e, "end")}
 												onPointerMove={moveMotionTrim}
 												onPointerUp={endMotionTrim}
@@ -2271,7 +2278,7 @@ export default function Timeline({
 													key={f}
 													className={"tl-marker ik" + (f === frame ? " current" : "")}
 													style={{ "--tl-f": framePct(f, displayFrameCount) }}
-													title={isKo ? `${f}프레임의 전신 IK 키 — 클릭해 이동, 오른쪽 클릭으로 삭제` : `Full-body IK key at frame ${f} — click to jump, right-click to remove`}
+													title={ko(`Full-body IK key at frame ${f} — click to jump, right-click to remove`, `${f}프레임의 전신 IK 키 — 클릭해 이동, 오른쪽 클릭으로 삭제`, `第 ${f} 帧的全身 IK 关键帧 — 点击跳转，右键删除`)}
 													onPointerDown={(e) => {
 														if (e.button !== 0) return;
 														e.stopPropagation();
@@ -2292,9 +2299,10 @@ export default function Timeline({
 													key={`run:${run.start}`}
 													className={"tl-ik-run" + (frame >= run.start && frame <= run.end ? " current" : "")}
 													style={{ "--tl-f": framePct(run.start, displayFrameCount), "--tl-f2": framePct(run.end, displayFrameCount) }}
-													title={isKo
-														? `${run.start}–${run.end} 전신 IK 키 (${run.length}개) — 클릭해 그 프레임으로 이동, 오른쪽 클릭으로 그 프레임 키 삭제`
-														: `IK keys ${run.start}–${run.end} (${run.length}) — click to jump to that frame, right-click to remove that frame's key`}
+													title={ko(
+														`IK keys ${run.start}–${run.end} (${run.length}) — click to jump to that frame, right-click to remove that frame's key`,
+														`${run.start}–${run.end} 전신 IK 키 (${run.length}개) — 클릭해 그 프레임으로 이동, 오른쪽 클릭으로 그 프레임 키 삭제`,
+														`第 ${run.start}–${run.end} 帧全身 IK 关键帧（${run.length} 个）— 点击跳到该帧，右键删除该帧关键帧`)}
 													onPointerDown={(e) => {
 														if (e.button !== 0) return;
 														e.stopPropagation();
@@ -2331,7 +2339,7 @@ export default function Timeline({
 												key={f}
 												className={"tl-marker wp" + (f === pendingWaypointFrame ? " pending" : "")}
 												style={{ "--tl-f": framePct(f, displayFrameCount) }}
-												title={isKo ? `${f}프레임의 루트 웨이포인트 — 클릭해 선택, 오른쪽 클릭으로 삭제. 탑뷰에서 ${waypointFrames.indexOf(f) + 1}번 마커를 드래그해 이동` : `Root waypoint at frame ${f} — click to select, right-click to remove; drag marker ${waypointFrames.indexOf(f) + 1} in Top-View to move`}
+												title={ko(`Root waypoint at frame ${f} — click to select, right-click to remove; drag marker ${waypointFrames.indexOf(f) + 1} in Top-View to move`, `${f}프레임의 루트 웨이포인트 — 클릭해 선택, 오른쪽 클릭으로 삭제. 탑뷰에서 ${waypointFrames.indexOf(f) + 1}번 마커를 드래그해 이동`, `第 ${f} 帧的根路径点 — 点击选择，右键删除。在顶视图拖动 ${waypointFrames.indexOf(f) + 1} 号标记来移动`)}
 												onPointerDown={(e) => {
 													// Select only on the primary button — a right click
 													// must reach contextmenu so it removes without scrubbing.
@@ -2352,7 +2360,7 @@ export default function Timeline({
 											key={`${shot.id}:${key.frame}`}
 											className="tl-marker cam"
 											style={{ "--tl-f": framePct(key.frame, displayFrameCount) }}
-											title={isKo ? `${key.frame}프레임의 카메라 키 — 클릭해 이동, 드래그로 시간 변경, 오른쪽 클릭으로 삭제` : `Camera key at frame ${key.frame} — click to jump, drag to re-time, right-click to remove`}
+											title={ko(`Camera key at frame ${key.frame} — click to jump, drag to re-time, right-click to remove`, `${key.frame}프레임의 카메라 키 — 클릭해 이동, 드래그로 시간 변경, 오른쪽 클릭으로 삭제`, `第 ${key.frame} 帧的相机关键帧 — 点击跳转，拖动改时间，右键删除`)}
 											onPointerDown={(e) => beginCameraKeyDrag(e, key, index)}
 											onPointerMove={moveCameraKeyDrag}
 											onPointerUp={endCameraKeyDrag}
@@ -2379,18 +2387,16 @@ export default function Timeline({
 					{waypointMode && (
 						<span className={"tl-wp-hint" + (waypointFrames.length < 2 ? " warn" : "")}>
 							{waypointFrames.length < 2
-								? ko("Click the set floor in the Shot view to add waypoints", "샷 뷰의 세트 바닥을 클릭해 웨이포인트를 추가하세요")
-								: isKo
-									? `루트 웨이포인트 ${waypointFrames.length}개 · 세트 바닥을 클릭해 더 추가`
-									: `${waypointFrames.length} root waypoints · click the set floor to add more`}
+								? ko("Click the set floor in the Shot view to add waypoints", "샷 뷰의 세트 바닥을 클릭해 웨이포인트를 추가하세요", "在镜头视图的场地地面上点击添加路径点")
+								: ko(`${waypointFrames.length} root waypoints · click the set floor to add more`, `루트 웨이포인트 ${waypointFrames.length}개 · 세트 바닥을 클릭해 더 추가`, `根路径点 ${waypointFrames.length} 个 · 点击场地地面继续添加`)}
 						</span>
 					)}
 					<button
 						type="button"
 						className="tl-toggle"
 						aria-expanded="false"
-						aria-label={ko("Expand timeline", "타임라인 펼치기")}
-						title={ko("Expand timeline", "타임라인 펼치기")}
+						aria-label={ko("Expand timeline", "타임라인 펼치기", "展开时间轴")}
+						title={ko("Expand timeline", "타임라인 펼치기", "展开时间轴")}
 						onClick={() => setExpanded(true)}
 					>
 						▸

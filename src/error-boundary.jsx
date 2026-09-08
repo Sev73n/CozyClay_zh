@@ -29,11 +29,11 @@ export default class ErrorBoundary extends Component {
 		if (!this.state.error) return this.props.children;
 		return (
 			<div className="crash-screen" role="alert">
-				<h1>{ko("The studio hit a render error", "스튜디오에 렌더링 오류가 발생했어요")}</h1>
-				<p>{ko("Scenes autosave as you work, so reloading resumes from the last saved state.", "작업 중 장면은 자동 저장되므로, 새로고침하면 마지막 저장 상태에서 이어집니다.")}</p>
+				<h1>{ko("The studio hit a render error", "스튜디오에 렌더링 오류가 발생했어요", "工作室遇到了渲染错误")}</h1>
+				<p>{ko("Scenes autosave as you work, so reloading resumes from the last saved state.", "작업 중 장면은 자동 저장되므로, 새로고침하면 마지막 저장 상태에서 이어집니다.", "工作时场景会自动保存，刷新会从上次保存接着来。")}</p>
 				<pre className="crash-detail">{String((this.state.error && this.state.error.message) || this.state.error)}</pre>
 				<button type="button" onClick={() => window.location.reload()}>
-					{ko("Reload the studio", "스튜디오 새로고침")}
+					{ko("Reload the studio", "스튜디오 새로고침", "刷新工作室")}
 				</button>
 			</div>
 		);

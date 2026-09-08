@@ -19,7 +19,12 @@ assert.equal(nextGuideMode("safe"), "off", "the cycle wraps");
 assert.equal(nextGuideMode("garbage"), "off", "unknown modes restart the cycle");
 assert.equal(normalizeGuideMode("golden"), "golden");
 assert.equal(normalizeGuideMode(undefined), "off");
-for (const mode of GUIDE_MODES) assert.ok(GUIDE_LABELS[mode]?.en && GUIDE_LABELS[mode]?.ko, `${mode} has bilingual labels`);
+for (const mode of GUIDE_MODES) {
+	assert.ok(
+		GUIDE_LABELS[mode]?.en && GUIDE_LABELS[mode]?.ko && GUIDE_LABELS[mode]?.zh,
+		`${mode} has en/ko/zh labels`,
+	);
+}
 
 // --- geometry -------------------------------------------------------------
 const thirds = guideGeometry("thirds");

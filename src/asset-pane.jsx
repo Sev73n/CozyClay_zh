@@ -164,15 +164,15 @@ function ImageAssetCard({ id, onAssetGrab }) {
 	// there but its bytes did not decode — the card MUST stay visible, or
 	// the failure leaves garbage the storage manager cannot even show.
 	if (thumb === undefined) return null;
-	const label = thumb?.name?.replace(/\.[^.]+$/, "") || ko("Image", "이미지");
+	const label = thumb?.name?.replace(/\.[^.]+$/, "") || ko("Image", "이미지", "图片");
 	const failed = thumb === null;
 	return (
 		<button
 			type="button"
 			className={"asset-card" + (failed ? " asset-card-failed" : "")}
 			title={failed
-				? ko(`${label} — could not decode; delete it from Manage storage`, `${label} — 불러오지 못했어요. 저장소 관리에서 삭제할 수 있어요`)
-				: ko(`Drag ${label} into the scene`, `${label}을(를) 씬에 드래그하세요`)}
+				? ko(`${label} — could not decode; delete it from Manage storage`, `${label} — 불러오지 못했어요. 저장소 관리에서 삭제할 수 있어요`, `${label} — 无法解码；可从存储管理中删除`)
+				: ko(`Drag ${label} into the scene`, `${label}을(를) 씬에 드래그하세요`, `把 ${label} 拖进场景`)}
 			{...(failed ? {} : grabProps(onAssetGrab, { kind: "image", assetId: id, label, aspect: thumb?.aspect ?? 1, thumb: thumb?.url ?? null }))}
 		>
 			{thumb ? (
@@ -181,7 +181,7 @@ function ImageAssetCard({ id, onAssetGrab }) {
 				<span className="asset-card-thumb asset-card-thumb-skeleton" aria-hidden="true" />
 			)}
 			<span className="asset-card-label">{label}</span>
-			<span className="asset-card-kind">{failed ? ko("Unreadable", "읽을 수 없음") : ko("Image", "이미지")}</span>
+			<span className="asset-card-kind">{failed ? ko("Unreadable", "읽을 수 없음", "无法读取") : ko("Image", "이미지", "图片")}</span>
 		</button>
 	);
 }
@@ -205,31 +205,31 @@ function StorageAssetRow({ id, onDelete, deleting, usageCount = 0, graphSignatur
 	// one screen whose job is deleting broken assets can actually reach it.
 	if (thumb === undefined) return null;
 	const failed = thumb === null;
-	const name = thumb?.name || (failed ? ko("(unreadable image)", "(읽을 수 없는 이미지)") : ko("Untitled image", "이름 없는 이미지"));
-	const usageLabel = ko(`Used by ${usageCount} scene object${usageCount === 1 ? "" : "s"}`, `${usageCount}개 씬 오브젝트에서 사용 중`);
-	const deleteLabel = ko(`Delete ${name} from storage`, `${name}을(를) 저장소에서 삭제`);
+	const name = thumb?.name || (failed ? ko("(unreadable image)", "(읽을 수 없는 이미지)", "(无法读取的图片)") : ko("Untitled image", "이름 없는 이미지", "未命名图片"));
+	const usageLabel = ko(`Used by ${usageCount} scene object${usageCount === 1 ? "" : "s"}`, `${usageCount}개 씬 오브젝트에서 사용 중`, `${usageCount} 个场景物体在使用`);
+	const deleteLabel = ko(`Delete ${name} from storage`, `${name}을(를) 저장소에서 삭제`, `从存储删除 ${name}`);
 	const confirmationId = `asset-storage-warning-${id}`;
 	return (
 		<li className="asset-storage-row">
 			{thumb ? <img className="asset-storage-thumb" src={thumb.url} alt="" /> : <span className="asset-storage-thumb asset-card-thumb-skeleton" aria-hidden="true" />}
 			<div className="asset-storage-details">
 				<strong title={name}>{name}</strong>
-				<span>{thumb ? `${thumb.kind === "matte" ? ko("Matte", "매트") : ko("Image", "이미지")} · ${thumb.bytesLabel}` : ko("Loading details…", "세부 정보 불러오는 중…")}</span>
+				<span>{thumb ? `${thumb.kind === "matte" ? ko("Matte", "매트", "蒙版") : ko("Image", "이미지", "图片")} · ${thumb.bytesLabel}` : ko("Loading details…", "세부 정보 불러오는 중…", "正在载入详情…")}</span>
 				{inUse && <span className="asset-storage-usage">{usageLabel}</span>}
 			</div>
 			{confirmation ? (
 				<div className="asset-storage-confirm">
 					<span id={confirmationId} role="alert">{inUse
-						? ko(`Permanently delete this image from storage? It is used by ${usageCount} scene object${usageCount === 1 ? "" : "s"} and those objects will lose it.`, `저장소에서 이 이미지를 영구 삭제할까요? ${usageCount}개 씬 오브젝트가 사용 중이며 해당 오브젝트에서 사라집니다.`)
-						: ko("Unused by every scene. Delete it?", "모든 씬에서 사용되지 않아요. 삭제할까요?")}</span>
+						? ko(`Permanently delete this image from storage? It is used by ${usageCount} scene object${usageCount === 1 ? "" : "s"} and those objects will lose it.`, `저장소에서 이 이미지를 영구 삭제할까요? ${usageCount}개 씬 오브젝트가 사용 중이며 해당 오브젝트에서 사라집니다.`, `要从存储永久删除这张图吗？有 ${usageCount} 个场景物体在用，它们会丢失这张图。`)
+						: ko("Unused by every scene. Delete it?", "모든 씬에서 사용되지 않아요. 삭제할까요?", "所有场景都没用到。要删除吗？")}</span>
 					<button type="button" className="asset-storage-delete" aria-label={deleteLabel} aria-describedby={confirmationId} disabled={deleting} onClick={async () => {
 						if (await onDelete(id, inUse ? usageCount : undefined, confirmation.graphSignature)) setConfirmation(null);
-					}}>{ko("Delete", "삭제")}</button>
-					<button type="button" className="asset-storage-cancel" disabled={deleting} onClick={() => setConfirmation(null)}>{ko("Cancel", "취소")}</button>
+					}}>{ko("Delete", "삭제", "删除")}</button>
+					<button type="button" className="asset-storage-cancel" disabled={deleting} onClick={() => setConfirmation(null)}>{ko("Cancel", "취소", "取消")}</button>
 				</div>
 			) : (
 				<button type="button" className="asset-storage-delete" aria-label={deleteLabel} disabled={deleting || !thumb} onClick={() => setConfirmation({ graphSignature })}>
-					{deleting ? ko("Deleting…", "삭제 중…") : ko("Delete", "삭제")}
+					{deleting ? ko("Deleting…", "삭제 중…", "删除中…") : ko("Delete", "삭제", "删除")}
 				</button>
 			)}
 		</li>
@@ -240,25 +240,25 @@ function StorageManager({ unusedAssetIds, usedAssetIds, usageCounts, graphSignat
 	const loading = unusedAssetIds === null || usedAssetIds === null;
 	const empty = !loading && unusedAssetIds.length === 0 && usedAssetIds.length === 0;
 	return (
-		<section className="asset-storage-manager" aria-label={ko("Manage storage", "저장 공간 관리")}>
+		<section className="asset-storage-manager" aria-label={ko("Manage storage", "저장 공간 관리", "管理存储")}>
 			<div className="asset-storage-head">
 				<div>
-					<h3>{ko("Manage storage", "저장 공간 관리")}</h3>
-					<p>{ko("Review unused and in-use stored images. Deleted images can be restored until this page is reloaded.", "사용하지 않는 이미지와 사용 중인 저장 이미지를 확인하세요. 삭제한 이미지는 이 페이지를 새로 고치기 전까지 복원할 수 있어요.")}</p>
+					<h3>{ko("Manage storage", "저장 공간 관리", "管理存储")}</h3>
+					<p>{ko("Review unused and in-use stored images. Deleted images can be restored until this page is reloaded.", "사용하지 않는 이미지와 사용 중인 저장 이미지를 확인하세요. 삭제한 이미지는 이 페이지를 새로 고치기 전까지 복원할 수 있어요.", "查看未用和在用的已存图片。删掉的图在本页刷新前还能恢复。")}</p>
 				</div>
-				{trashCount > 0 && <button type="button" className="asset-storage-undo" onClick={onUndo}>{ko(`Undo last delete (${trashCount})`, `마지막 삭제 실행 취소 (${trashCount})`)}</button>}
+				{trashCount > 0 && <button type="button" className="asset-storage-undo" onClick={onUndo}>{ko(`Undo last delete (${trashCount})`, `마지막 삭제 실행 취소 (${trashCount})`, `撤销上次删除 (${trashCount})`)}</button>}
 			</div>
 			{loading ? (
 				<div className="asset-storage-list" aria-busy="true">
 					{[0, 1].map((n) => <span className="asset-storage-row asset-storage-row-skeleton" key={n} aria-hidden="true" />)}
 				</div>
 			) : empty ? (
-				<p className="assets-empty">{ko("No stored image assets.", "저장된 이미지 에셋이 없어요.")}</p>
+				<p className="assets-empty">{ko("No stored image assets.", "저장된 이미지 에셋이 없어요.", "没有已存的图片资源。")}</p>
 			) : <>
 				<section className="asset-storage-section is-unused" aria-labelledby="asset-storage-unused-title">
-					<h4 id="asset-storage-unused-title">{ko("Unused", "미사용")}</h4>
+					<h4 id="asset-storage-unused-title">{ko("Unused", "미사용", "未使用")}</h4>
 					{unusedAssetIds.length === 0 ? (
-						<p className="assets-empty">{ko("No unused image assets. Every stored image is still used by a scene.", "사용되지 않는 이미지 에셋이 없어요. 저장된 모든 이미지를 씬에서 사용 중입니다.")}</p>
+						<p className="assets-empty">{ko("No unused image assets. Every stored image is still used by a scene.", "사용되지 않는 이미지 에셋이 없어요. 저장된 모든 이미지를 씬에서 사용 중입니다.", "没有未使用的图片。存着的每张图场景都在用。")}</p>
 					) : (
 						<ul className="asset-storage-list">
 							{unusedAssetIds.map((id) => <StorageAssetRow key={id} id={id} onDelete={onDelete} deleting={deletingAssetId === id} graphSignature={graphSignature} />)}
@@ -266,9 +266,9 @@ function StorageManager({ unusedAssetIds, usedAssetIds, usageCounts, graphSignat
 					)}
 				</section>
 				<section className="asset-storage-section is-used" aria-labelledby="asset-storage-used-title">
-					<h4 id="asset-storage-used-title">{ko("In use", "사용 중")}</h4>
+					<h4 id="asset-storage-used-title">{ko("In use", "사용 중", "使用中")}</h4>
 					{usedAssetIds.length === 0 ? (
-						<p className="assets-empty">{ko("No stored image assets are used by a scene.", "씬에서 사용하는 저장 이미지 에셋이 없어요.")}</p>
+						<p className="assets-empty">{ko("No stored image assets are used by a scene.", "씬에서 사용하는 저장 이미지 에셋이 없어요.", "场景没有用到已存的图片资源。")}</p>
 					) : (
 						<ul className="asset-storage-list">
 							{usedAssetIds.map((id) => <StorageAssetRow key={id} id={id} usageCount={usageCounts.get(id) ?? 0} onDelete={onDelete} deleting={deletingAssetId === id} graphSignature={graphSignature} />)}
@@ -295,32 +295,32 @@ export default function AssetPane({ onAssetGrab, imageAssetIds, manageStorage, o
 		<div className="assets-shelf">
 			<div className="assets-shelf-toolbar">
 				<button type="button" className="assets-manage-toggle" aria-pressed={manageStorage} onClick={onManageStorageToggle}>
-					{manageStorage ? ko("Back to assets", "에셋으로 돌아가기") : ko("Manage storage", "저장 공간 관리")}
+					{manageStorage ? ko("Back to assets", "에셋으로 돌아가기", "返回资源") : ko("Manage storage", "저장 공간 관리", "管理存储")}
 				</button>
 			</div>
 			{manageStorage ? (
 				<StorageManager unusedAssetIds={unusedAssetIds} usedAssetIds={usedAssetIds} usageCounts={usageCounts} graphSignature={graphSignature} trashCount={trashCount} onDelete={onDeleteUnusedAsset} onUndo={onUndoDelete} deletingAssetId={deletingAssetId} />
 			) : <>
 				<section className="assets-section">
-					<h3 className="assets-section-title">{ko("Characters", "인물")}</h3>
+					<h3 className="assets-section-title">{ko("Characters", "인물", "人物")}</h3>
 					<div className="assets-grid">
 						{CHARACTER_ASSETS.map((asset) => (
 							<button
 								type="button"
 								className="asset-card"
 								key={asset.id}
-								title={ko(`Drag ${asset.label} into the scene`, `${asset.label}을(를) 씬에 드래그하세요`)}
+								title={ko(`Drag ${asset.label} into the scene`, `${asset.label}을(를) 씬에 드래그하세요`, `把 ${asset.label} 拖进场景`)}
 								{...grabProps(onAssetGrab, { kind: "character", id: asset.id, label: asset.label })}
 							>
 								<CharacterPreview model={asset.id} />
 								<span className="asset-card-label">{asset.label}</span>
-								<span className="asset-card-kind">{ko("Character", "인물")}</span>
+								<span className="asset-card-kind">{ko("Character", "인물", "人物")}</span>
 							</button>
 						))}
 					</div>
 				</section>
 				<section className="assets-section">
-					<h3 className="assets-section-title">{ko("Objects", "오브젝트")}</h3>
+					<h3 className="assets-section-title">{ko("Objects", "오브젝트", "物体")}</h3>
 					<div className="assets-grid">
 						{OBJECT_LIBRARY.map((entry) => (
 							<button
@@ -330,6 +330,7 @@ export default function AssetPane({ onAssetGrab, imageAssetIds, manageStorage, o
 								title={ko(
 									`Drag ${entry.label} into the scene`,
 									`${displayObjectLabel(entry.label)}을(를) 씬에 드래그하세요`,
+									`把 ${displayObjectLabel(entry.label)} 拖进场景`,
 								)}
 								{...grabProps(onAssetGrab, { kind: "object", objectKind: entry.kind, label: displayObjectLabel(entry.label), color: entry.color })}
 							>
@@ -341,7 +342,7 @@ export default function AssetPane({ onAssetGrab, imageAssetIds, manageStorage, o
 					</div>
 				</section>
 				<section className="assets-section">
-					<h3 className="assets-section-title">{ko("My images", "내 이미지")}</h3>
+					<h3 className="assets-section-title">{ko("My images", "내 이미지", "我的图片")}</h3>
 					{imageAssetIds === null ? (
 						<div className="assets-grid" aria-busy="true">
 							{[0, 1, 2].map((n) => <span className="asset-card asset-card-skeleton" key={n} aria-hidden="true" />)}
@@ -351,6 +352,7 @@ export default function AssetPane({ onAssetGrab, imageAssetIds, manageStorage, o
 							{ko(
 								"No imported images yet. Use \u201cImport image as cutout\u201d in the Props inspector, or drop or paste a picture into the studio.",
 								"아직 가져온 이미지가 없어요. 소품 인스펙터의 \u201c이미지를 컷아웃으로 가져오기\u201d를 사용하거나, 이미지를 스튜디오에 드래그하거나 붙여넣으세요.",
+								"还没有导入的图片。在道具检查器里用“将图片导入为立牌”，或把图片拖进/粘贴到工作室。",
 							)}
 						</p>
 					) : (

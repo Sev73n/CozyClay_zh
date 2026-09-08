@@ -191,7 +191,10 @@ function verificationFiles(directory) {
 		.flatMap((entry) => {
 			const path = join(directory, entry.name);
 			if (entry.isDirectory()) return entry.name === "node_modules" ? [] : verificationFiles(path);
-			return entry.isFile() && /^verify(-.*)?\.mjs$/.test(entry.name) ? [relative(".", path)] : [];
+			// Manifest keys use forward slashes; normalize so Windows inventory matches.
+			return entry.isFile() && /^verify(-.*)?\.mjs$/.test(entry.name)
+				? [relative(".", path).split("\\").join("/")]
+				: [];
 		})
 		.sort();
 }

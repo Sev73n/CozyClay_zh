@@ -159,10 +159,10 @@ ok(
 	"the prop's track carries the route controls",
 	["Draw path", "Speed", "Keep going", "Loop", "Delete path"].every((label) => travelTrackSource.includes(label)),
 );
-ok("the prop's track names its subject", travelTrackSource.includes('ko("PROP", "소품")'));
+ok("the prop's track names its subject", travelTrackSource.includes('ko("PROP", "소품"'));
 ok("the prop's track folds duration into the graph header", travelTrackSource.includes("metrics.length.toFixed(1)") && travelTrackSource.includes("seconds.toFixed(1)"));
 ok("prop motion did not become a separate bottom tab", !appSource.includes('bottomTab === "object"'));
-ok("the inspector still does not host the path controls", !appSource.includes('ko("Travel path", "이동 경로")'));
+ok("the inspector still does not host the path controls", !appSource.includes('ko("Travel path", "이동 경로"'));
 
 /* --- mid-path points ------------------------------------------------------- */
 
@@ -233,9 +233,9 @@ ok("the speed editor is a real instrument: header, graph body, axes",
 	cssSource.includes(".sg-head") && cssSource.includes(".sg-body svg") &&
 	cssSource.includes(".sg-axis") && cssSource.includes(".sg-average"));
 ok("cuts are visible affordances, not hidden gestures",
-	timelineSource.includes('ko("Cut at playhead", "재생 위치에 컷")') &&
+	timelineSource.includes('ko("Cut at playhead", "재생 위치에 컷"') &&
 	cssSource.includes(".sg-cut-diamond"));
-ok("the travel bar row is gone, folded into the graph", !travelTrackSource.includes('ko("Travel", "이동")') && !cssSource.includes(".objmo-travel {"));
+ok("the travel bar row is gone, folded into the graph", !travelTrackSource.includes('ko("Travel", "이동"') && !cssSource.includes(".objmo-travel {"));
 
 
 ok("the speed graph never display-clamps: the axis follows the data",

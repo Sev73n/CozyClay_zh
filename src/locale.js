@@ -1,30 +1,44 @@
-// CozyClay UI locale. English is the default; Korean is opt-in.
+// CozyClay UI locale. Chinese is the default; English and Korean are opt-in.
 //
-// An explicit choice saved in localStorage wins. Without one, the UI always
-// starts in English regardless of browser or operating-system language.
-// The locale is fixed for the lifetime of the page — every label goes through
-// ko() at render time, so switching saves the choice and reloads.
+// Direction (i18n/zh): extend the official ko(en, ko) helper with an optional
+// Chinese third argument and a three-way cycle (en → ko → zh). An explicit
+// choice saved in localStorage wins. Without one, the UI starts in Chinese
+// regardless of browser or operating-system language. The locale is fixed for
+// the lifetime of the page — every label goes through ko() at render time, so
+// switching saves the choice and reloads.
 const KEY = "cozyclay.locale";
+const LOCALES = new Set(["zh", "en", "ko"]);
 
 function stored() {
 	try {
 		const value = localStorage.getItem(KEY);
-		return value === "ko" || value === "en" ? value : null;
+		return LOCALES.has(value) ? value : null;
 	} catch {
 		return null;
 	}
 }
 
-export const LOCALE = stored() ?? "en";
+export const LOCALE = stored() ?? "zh";
 export const isKo = LOCALE === "ko";
+export const isZh = LOCALE === "zh";
 
-/** Pick the label for the active locale: ko("Frame", "프레임"). */
-export function ko(en, koText) {
-	return isKo ? koText : en;
+/** Pick the label for the active locale: ko("Frame", "프레임", "帧"). */
+export function ko(en, koText, zhText) {
+	if (isZh) return zhText ?? en;
+	if (isKo) return koText;
+	return en;
+}
+
+/** Pick from [en, ko, zh] by the active locale. */
+export function pick(parts) {
+	if (!parts) return undefined;
+	if (isZh) return parts[2] ?? parts[0];
+	if (isKo) return parts[1] ?? parts[0];
+	return parts[0];
 }
 
 export function setLocale(next) {
-	if (next !== "ko" && next !== "en") return;
+	if (!LOCALES.has(next)) return;
 	try {
 		localStorage.setItem(KEY, next);
 	} catch {

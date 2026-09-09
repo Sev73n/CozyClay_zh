@@ -46,7 +46,7 @@ import {
 import ObjectGizmo from "./object-gizmo.jsx";
 import { MAX_PATH_POINTS } from "./object-path.js";
 import { track } from "./analytics.js";
-import { ko, isKo } from "./locale.js";
+import { ko } from "./locale.js";
 import { applyPartColours } from "./part-colours.js";
 import { POSE_BONES, applyHipsOffset, applyPose, primeBindPose, normalizeBoneName } from "./poses.js";
 import { FK_TRACKS, IK_TRACKS, MID_TRACKS } from "./ardy/ik.js";
@@ -59,11 +59,11 @@ import { shotAtFrame } from "./cuts.js";
 // lens rides, and what glass is on it. Order matters — Medium is the setup a
 // director reaches for first, so it leads.
 export const PRESETS = {
-	medium: { label: ko("Medium", "미디엄"), distance: 2.6, azimuth: 22, elevation: 6, fov: 45, targetY: 1.35, two: false },
-	wide: { label: ko("Wide", "와이드"), distance: 7, azimuth: 25, elevation: 4, fov: 38, targetY: 1.2, two: false },
-	closeup: { label: ko("Close-Up", "클로즈업"), distance: 1.3, azimuth: 16, elevation: 2, fov: 45, targetY: 1.55, two: false },
-	low: { label: ko("Low Angle", "로우 앵글"), distance: 3.5, azimuth: 20, elevation: -14, fov: 50, targetY: 1.1, two: false },
-	high: { label: ko("High Angle", "하이 앵글"), distance: 4.5, azimuth: 20, elevation: 16, fov: 45, targetY: 1.1, two: false },
+	medium: { label: ko("Medium", "미디엄", "中景"), distance: 2.6, azimuth: 22, elevation: 6, fov: 45, targetY: 1.35, two: false },
+	wide: { label: ko("Wide", "와이드", "全景"), distance: 7, azimuth: 25, elevation: 4, fov: 38, targetY: 1.2, two: false },
+	closeup: { label: ko("Close-Up", "클로즈업", "特写"), distance: 1.3, azimuth: 16, elevation: 2, fov: 45, targetY: 1.55, two: false },
+	low: { label: ko("Low Angle", "로우 앵글", "仰拍"), distance: 3.5, azimuth: 20, elevation: -14, fov: 50, targetY: 1.1, two: false },
+	high: { label: ko("High Angle", "하이 앵글", "俯拍"), distance: 4.5, azimuth: 20, elevation: 16, fov: 45, targetY: 1.1, two: false },
 };
 
 export const RIG_HIERARCHY_FOCUS = {
@@ -90,35 +90,35 @@ export const RIG_HIERARCHY_FOCUS = {
 };
 
 export const HIERARCHY_INSPECTOR_TITLES = {
-	shot: ko("Shot settings", "샷 설정"),
-	camera: ko("Camera", "카메라"),
-	light: ko("Light", "조명"),
-	characters: ko("Characters", "인물"),
-	characterA: ko("Character 1", "인물 1"),
-	rig: ko("Rig", "리그"),
-	characterB: ko("Character 2", "인물 2"),
-	environment: ko("Environment", "환경"),
-	props: ko("Props", "소품"),
-	"rig.torso": ko("Torso", "몸통"),
-	"rig.hips": ko("Root / Hips", "루트 / 엉덩이"),
-	"rig.spine": ko("Spine", "척추"),
-	"rig.chest": ko("Chest", "가슴"),
-	"rig.neck": ko("Neck", "목"),
-	"rig.head": ko("Head", "머리"),
-	"rig.leftArm": ko("Left Arm", "왼팔"),
-	"rig.leftShoulder": ko("Left Shoulder", "왼쪽 어깨"),
-	"rig.leftElbow": ko("Left Elbow", "왼쪽 팔꿈치"),
-	"rig.leftHand": ko("Left Hand", "왼손"),
-	"rig.rightArm": ko("Right Arm", "오른팔"),
-	"rig.rightShoulder": ko("Right Shoulder", "오른쪽 어깨"),
-	"rig.rightElbow": ko("Right Elbow", "오른쪽 팔꿈치"),
-	"rig.rightHand": ko("Right Hand", "오른손"),
-	"rig.leftLeg": ko("Left Leg", "왼다리"),
-	"rig.leftKnee": ko("Left Knee", "왼쪽 무릎"),
-	"rig.leftFoot": ko("Left Foot", "왼발"),
-	"rig.rightLeg": ko("Right Leg", "오른다리"),
-	"rig.rightKnee": ko("Right Knee", "오른쪽 무릎"),
-	"rig.rightFoot": ko("Right Foot", "오른발"),
+	shot: ko("Shot settings", "샷 설정", "镜头设置"),
+	camera: ko("Camera", "카메라", "相机"),
+	light: ko("Light", "조명", "灯光"),
+	characters: ko("Characters", "인물", "人物"),
+	characterA: ko("Character 1", "인물 1", "人物 1"),
+	rig: ko("Rig", "리그", "绑定"),
+	characterB: ko("Character 2", "인물 2", "人物 2"),
+	environment: ko("Environment", "환경", "环境"),
+	props: ko("Props", "소품", "道具"),
+	"rig.torso": ko("Torso", "몸통", "躯干"),
+	"rig.hips": ko("Root / Hips", "루트 / 엉덩이", "根 / 髋"),
+	"rig.spine": ko("Spine", "척추", "脊柱"),
+	"rig.chest": ko("Chest", "가슴", "胸部"),
+	"rig.neck": ko("Neck", "목", "颈"),
+	"rig.head": ko("Head", "머리", "头"),
+	"rig.leftArm": ko("Left Arm", "왼팔", "左臂"),
+	"rig.leftShoulder": ko("Left Shoulder", "왼쪽 어깨", "左肩"),
+	"rig.leftElbow": ko("Left Elbow", "왼쪽 팔꿈치", "左肘"),
+	"rig.leftHand": ko("Left Hand", "왼손", "左手"),
+	"rig.rightArm": ko("Right Arm", "오른팔", "右臂"),
+	"rig.rightShoulder": ko("Right Shoulder", "오른쪽 어깨", "右肩"),
+	"rig.rightElbow": ko("Right Elbow", "오른쪽 팔꿈치", "右肘"),
+	"rig.rightHand": ko("Right Hand", "오른손", "右手"),
+	"rig.leftLeg": ko("Left Leg", "왼다리", "左腿"),
+	"rig.leftKnee": ko("Left Knee", "왼쪽 무릎", "左膝"),
+	"rig.leftFoot": ko("Left Foot", "왼발", "左脚"),
+	"rig.rightLeg": ko("Right Leg", "오른다리", "右腿"),
+	"rig.rightKnee": ko("Right Knee", "오른쪽 무릎", "右膝"),
+	"rig.rightFoot": ko("Right Foot", "오른발", "右脚"),
 };
 
 /* ----------------------------------------- carried props (attachment) --- */
@@ -289,83 +289,83 @@ export function placeSceneObject(objects, id, placement) {
 }
 
 export const CAMERA_MOVE_LABELS_KO = new Map([
-	["Static / locked-off", ko("Static / locked-off", "고정 샷")],
-	["Zoom in", ko("Zoom in", "줌 인")],
-	["Zoom out", ko("Zoom out", "줌 아웃")],
-	["Push-in (dolly in)", ko("Push-in (dolly in)", "푸시인(돌리 인)")],
-	["Pull-out (dolly out)", ko("Pull-out (dolly out)", "풀아웃(돌리 아웃)")],
-	["Pan left", ko("Pan left", "왼쪽 팬")],
-	["Pan right", ko("Pan right", "오른쪽 팬")],
-	["Tilt up", ko("Tilt up", "틸트 업")],
-	["Tilt down", ko("Tilt down", "틸트 다운")],
-	["Tracking / follow", ko("Tracking / follow", "트래킹 / 팔로우")],
-	["Orbit / arc", ko("Orbit / arc", "오빗 / 아크")],
-	["Crane up", ko("Crane up", "크레인 업")],
-	["Crane down", ko("Crane down", "크레인 다운")],
-	["Handheld", ko("Handheld", "핸드헬드")],
-	["Crash zoom in", ko("Crash zoom in", "크래시 줌 인")],
-	["Dolly-zoom (vertigo)", ko("Dolly-zoom (vertigo)", "돌리 줌(버티고)")],
-	["Whip pan", ko("Whip pan", "휩 팬")],
-	["Aerial / drone", ko("Aerial / drone", "공중 / 드론")],
-	[CUSTOM_MOVE, ko(CUSTOM_MOVE, "직접 입력…")],
+	["Static / locked-off", ko("Static / locked-off", "고정 샷", "固定镜头")],
+	["Zoom in", ko("Zoom in", "줌 인", "变焦拉近")],
+	["Zoom out", ko("Zoom out", "줌 아웃", "变焦拉远")],
+	["Push-in (dolly in)", ko("Push-in (dolly in)", "푸시인(돌리 인)", "推进（推轨前推）")],
+	["Pull-out (dolly out)", ko("Pull-out (dolly out)", "풀아웃(돌리 아웃)", "拉远（推轨后拉）")],
+	["Pan left", ko("Pan left", "왼쪽 팬", "左摇")],
+	["Pan right", ko("Pan right", "오른쪽 팬", "右摇")],
+	["Tilt up", ko("Tilt up", "틸트 업", "上仰")],
+	["Tilt down", ko("Tilt down", "틸트 다운", "下俯")],
+	["Tracking / follow", ko("Tracking / follow", "트래킹 / 팔로우", "跟踪 / 跟随")],
+	["Orbit / arc", ko("Orbit / arc", "오빗 / 아크", "环绕 / 弧线")],
+	["Crane up", ko("Crane up", "크레인 업", "摇臂上升")],
+	["Crane down", ko("Crane down", "크레인 다운", "摇臂下降")],
+	["Handheld", ko("Handheld", "핸드헬드", "手持")],
+	["Crash zoom in", ko("Crash zoom in", "크래시 줌 인", "急推")],
+	["Dolly-zoom (vertigo)", ko("Dolly-zoom (vertigo)", "돌리 줌(버티고)", "推轨变焦（眩晕）")],
+	["Whip pan", ko("Whip pan", "휩 팬", "甩镜")],
+	["Aerial / drone", ko("Aerial / drone", "공중 / 드론", "航拍 / 无人机")],
+	[CUSTOM_MOVE, ko(CUSTOM_MOVE, "직접 입력…", "自定义…")],
 ]);
 
 export const POSE_LABELS_KO = new Map([
-	["T-pose", ko("T-pose", "T 포즈")],
-	["Relaxed", ko("Relaxed", "편안한 자세")],
-	["Contrapposto", ko("Contrapposto", "콘트라포스토")],
-	["Walking", ko("Walking", "걷는 자세")],
-	["Seated", ko("Seated", "앉은 자세")],
-	["Arms crossed", ko("Arms crossed", "팔짱")],
-	["Pointing", ko("Pointing", "가리키기")],
-	["Hands on hips", ko("Hands on hips", "허리에 손")],
-	["Looking back", ko("Looking back", "뒤돌아보기")],
-	["Hands up", ko("Hands up", "손 올리기")],
+	["T-pose", ko("T-pose", "T 포즈", "T 姿势")],
+	["Relaxed", ko("Relaxed", "편안한 자세", "放松站姿")],
+	["Contrapposto", ko("Contrapposto", "콘트라포스토", "对立站姿")],
+	["Walking", ko("Walking", "걷는 자세", "走姿")],
+	["Seated", ko("Seated", "앉은 자세", "坐姿")],
+	["Arms crossed", ko("Arms crossed", "팔짱", "抱臂")],
+	["Pointing", ko("Pointing", "가리키기", "指向")],
+	["Hands on hips", ko("Hands on hips", "허리에 손", "叉腰")],
+	["Looking back", ko("Looking back", "뒤돌아보기", "回望")],
+	["Hands up", ko("Hands up", "손 올리기", "举手")],
 ]);
 
 export const SHOT_SIZE_LABELS_KO = new Map([
-	["extreme close-up", ko("extreme close-up", "익스트림 클로즈업")],
-	["close-up", ko("close-up", "클로즈업")],
-	["medium close-up", ko("medium close-up", "미디엄 클로즈업")],
-	["medium shot", ko("medium shot", "미디엄 샷")],
-	["medium-wide shot", ko("medium-wide shot", "미디엄 와이드 샷")],
-	["wide shot", ko("wide shot", "와이드 샷")],
-	["extreme wide shot", ko("extreme wide shot", "익스트림 와이드 샷")],
+	["extreme close-up", ko("extreme close-up", "익스트림 클로즈업", "大特写")],
+	["close-up", ko("close-up", "클로즈업", "特写")],
+	["medium close-up", ko("medium close-up", "미디엄 클로즈업", "中近景")],
+	["medium shot", ko("medium shot", "미디엄 샷", "中景")],
+	["medium-wide shot", ko("medium-wide shot", "미디엄 와이드 샷", "中全景")],
+	["wide shot", ko("wide shot", "와이드 샷", "全景")],
+	["extreme wide shot", ko("extreme wide shot", "익스트림 와이드 샷", "大远景")],
 ]);
 
 export const SHOT_LEVEL_LABELS_KO = new Map([
-	["overhead", ko("overhead", "오버헤드")],
-	["high angle", ko("high angle", "하이 앵글")],
-	["eye level", ko("eye level", "아이 레벨")],
-	["chest level", ko("chest level", "가슴 높이")],
-	["hip level", ko("hip level", "엉덩이 높이")],
-	["knee level", ko("knee level", "무릎 높이")],
-	["ground level", ko("ground level", "바닥 높이")],
+	["overhead", ko("overhead", "오버헤드", "俯瞰")],
+	["high angle", ko("high angle", "하이 앵글", "俯拍")],
+	["eye level", ko("eye level", "아이 레벨", "平视")],
+	["chest level", ko("chest level", "가슴 높이", "胸高")],
+	["hip level", ko("hip level", "엉덩이 높이", "髋高")],
+	["knee level", ko("knee level", "무릎 높이", "膝高")],
+	["ground level", ko("ground level", "바닥 높이", "贴地")],
 ]);
 
 export const SCENE_RENDERER_LABELS_KO = new Map([
-	["cube", ko("cube", "큐브")],
-	["sphere", ko("sphere", "구")],
-	["capsule", ko("capsule", "캡슐")],
-	["cylinder", ko("cylinder", "원기둥")],
-	["cone", ko("cone", "원뿔")],
-	["plane", ko("plane", "평면")],
-	["chair", ko("chair", "의자")],
-	["car", ko("car", "자동차")],
-	["aircraft", ko("aircraft", "비행기")],
-	[CUTOUT_KIND, ko("cutout", "컷아웃")],
+	["cube", ko("cube", "큐브", "立方体")],
+	["sphere", ko("sphere", "구", "球")],
+	["capsule", ko("capsule", "캡슐", "胶囊")],
+	["cylinder", ko("cylinder", "원기둥", "圆柱")],
+	["cone", ko("cone", "원뿔", "圆锥")],
+	["plane", ko("plane", "평면", "平面")],
+	["chair", ko("chair", "의자", "椅子")],
+	["car", ko("car", "자동차", "汽车")],
+	["aircraft", ko("aircraft", "비행기", "飞机")],
+	[CUTOUT_KIND, ko("cutout", "컷아웃", "立牌")],
 ]);
 
 export const SCENE_OBJECT_NAME_LABELS_KO = new Map([
-	["Cube", ko("Cube", "큐브")],
-	["Sphere", ko("Sphere", "구")],
-	["Capsule", ko("Capsule", "캡슐")],
-	["Cylinder", ko("Cylinder", "원기둥")],
-	["Cone", ko("Cone", "원뿔")],
-	["Plane", ko("Plane", "평면")],
-	["Chair", ko("Chair", "의자")],
-	["Car", ko("Car", "자동차")],
-	["Plane (aircraft)", ko("Plane (aircraft)", "비행기")],
+	["Cube", ko("Cube", "큐브", "立方体")],
+	["Sphere", ko("Sphere", "구", "球")],
+	["Capsule", ko("Capsule", "캡슐", "胶囊")],
+	["Cylinder", ko("Cylinder", "원기둥", "圆柱")],
+	["Cone", ko("Cone", "원뿔", "圆锥")],
+	["Plane", ko("Plane", "평면", "平面")],
+	["Chair", ko("Chair", "의자", "椅子")],
+	["Car", ko("Car", "자동차", "汽车")],
+	["Plane (aircraft)", ko("Plane (aircraft)", "비행기", "飞机")],
 ]);
 
 export function poseLabelKo(pose) {
@@ -389,11 +389,11 @@ export function sceneObjectNameDisplayKo(name) {
 }
 
 export function viewShortKo(viewShort) {
-	if (viewShort === "front") return ko("front", "정면");
-	if (viewShort === "back") return ko("back", "후면");
-	if (viewShort?.includes("profile")) return viewShort.startsWith("left") ? ko("left profile", "왼쪽 측면") : ko("right profile", "오른쪽 측면");
-	if (viewShort?.startsWith("front ¾")) return / L$/.test(viewShort) ? ko("front ¾ L", "정면 ¾ 왼쪽") : ko("front ¾ R", "정면 ¾ 오른쪽");
-	if (viewShort?.startsWith("rear ¾")) return / L$/.test(viewShort) ? ko("rear ¾ L", "후면 ¾ 왼쪽") : ko("rear ¾ R", "후면 ¾ 오른쪽");
+	if (viewShort === "front") return ko("front", "정면", "正面");
+	if (viewShort === "back") return ko("back", "후면", "背面");
+	if (viewShort?.includes("profile")) return viewShort.startsWith("left") ? ko("left profile", "왼쪽 측면", "左侧") : ko("right profile", "오른쪽 측면", "右侧");
+	if (viewShort?.startsWith("front ¾")) return / L$/.test(viewShort) ? ko("front ¾ L", "정면 ¾ 왼쪽", "正面 ¾ 左") : ko("front ¾ R", "정면 ¾ 오른쪽", "正面 ¾ 右");
+	if (viewShort?.startsWith("rear ¾")) return / L$/.test(viewShort) ? ko("rear ¾ L", "후면 ¾ 왼쪽", "背面 ¾ 左") : ko("rear ¾ R", "후면 ¾ 오른쪽", "背面 ¾ 右");
 	return viewShort;
 }
 
@@ -645,11 +645,11 @@ export const PRESERVE_TRACK_LIMBS = {
 // A fixed reading order, so the same edit always reads back the same way.
 export const PRESERVE_LIMB_ORDER = ["head", "leftArm", "rightArm", "leftLeg", "rightLeg"];
 export const preserveLimbLabel = (limb) => ({
-	head: ko("head", "머리"),
-	leftArm: ko("left arm", "왼팔"),
-	rightArm: ko("right arm", "오른팔"),
-	leftLeg: ko("left leg", "왼발"),
-	rightLeg: ko("right leg", "오른발"),
+	head: ko("head", "머리", "头"),
+	leftArm: ko("left arm", "왼팔", "左臂"),
+	rightArm: ko("right arm", "오른팔", "右臂"),
+	leftLeg: ko("left leg", "왼발", "左腿"),
+	rightLeg: ko("right leg", "오른발", "右腿"),
 }[limb]);
 
 /** One muted line naming what a grouped preserve run will regenerate, or "" when
@@ -662,9 +662,9 @@ export function preserveTracksSummary(tracks) {
 		if (limb) limbs.add(limb);
 	}
 	if (limbs.size === 0) return "";
-	if (limbs.has("body")) return ko("regenerates the whole body", "몸 전체를 다시 생성");
+	if (limbs.has("body")) return ko("regenerates the whole body", "몸 전체를 다시 생성", "会重做全身");
 	const names = PRESERVE_LIMB_ORDER.filter((limb) => limbs.has(limb)).map(preserveLimbLabel);
-	return isKo ? `${names.join("·")}만 다시 생성` : `regenerates ${names.join(" · ")} only`;
+	return ko(`regenerates ${names.join(" · ")} only`, `${names.join("·")}만 다시 생성`, `只重做 ${names.join(" · ")}`);
 }
 
 /* --------------------------- line editing (C6) ---------------------------
@@ -717,72 +717,73 @@ export const LINE_CAPABILITY_RETRY_MS = 4000;
  * Keyed by the pure module's stable codes so the copy and the check can never
  * disagree about which field was wrong. */
 export const LINE_EDIT_REFUSALS = {
-	sourceMotion: ["The current take has no bridge source — generate it once before editing a path", "현재 테이크에 브리지 원본이 없어요 — 궤적을 편집하기 전에 한 번 생성하세요"],
-	track: ["Pick a joint to edit first", "먼저 편집할 관절을 고르세요"],
-	frameRange: ["The frame range must sit inside the clip and span at least 2 frames", "프레임 구간은 클립 안에 있어야 하고 최소 2프레임이어야 해요"],
-	points: ["Pull a longer stretch of the path — a single point is not a path", "궤적을 좀 더 길게 잡아당겨 주세요 — 점 하나는 경로가 아니에요"],
-	camera: ["The camera could not be captured — nudge the view and try again", "카메라를 캡처하지 못했어요 — 뷰를 조금 움직인 뒤 다시 시도하세요"],
-	prompt: ["The motion prompt is not usable for a line edit", "모션 프롬프트를 라인 편집에 쓸 수 없어요"],
-	pins: ["The pinned moments could not be sent — try clearing them and pinning again", "찍은 순간을 보낼 수 없어요 — 지우고 다시 찍어 보세요"],
-	shape: ["The line edit could not be assembled", "라인 편집을 구성하지 못했어요"],
+	sourceMotion: ["The current take has no bridge source — generate it once before editing a path", "현재 테이크에 브리지 원본이 없어요 — 궤적을 편집하기 전에 한 번 생성하세요", "当前条没有桥接源 — 编辑路径前请先生成一次"],
+	track: ["Pick a joint to edit first", "먼저 편집할 관절을 고르세요", "请先选一个要编辑的关节"],
+	frameRange: ["The frame range must sit inside the clip and span at least 2 frames", "프레임 구간은 클립 안에 있어야 하고 최소 2프레임이어야 해요", "帧范围必须在片段内，且至少跨 2 帧"],
+	points: ["Pull a longer stretch of the path — a single point is not a path", "궤적을 좀 더 길게 잡아당겨 주세요 — 점 하나는 경로가 아니에요", "请把路径拉得更长 — 单个点不成路径"],
+	camera: ["The camera could not be captured — nudge the view and try again", "카메라를 캡처하지 못했어요 — 뷰를 조금 움직인 뒤 다시 시도하세요", "无法捕获相机 — 稍微挪一下视角再试"],
+	prompt: ["The motion prompt is not usable for a line edit", "모션 프롬프트를 라인 편집에 쓸 수 없어요", "该动作提示词不能用于路径编辑"],
+	pins: ["The pinned moments could not be sent — try clearing them and pinning again", "찍은 순간을 보낼 수 없어요 — 지우고 다시 찍어 보세요", "无法发送钉点瞬间 — 请清除后重新钉"],
+	shape: ["The line edit could not be assembled", "라인 편집을 구성하지 못했어요", "无法组装路径编辑"],
 };
 /** Why curveToPoints2d refused. Same shape, different stage: these are about
  * the CURVE, before there is a payload to validate. */
 export const LINE_CURVE_REFUSALS = {
-	empty: ["This joint is not visible over the chosen frames — frame it in view first", "선택한 구간에서 이 관절이 보이지 않아요 — 먼저 화면 안에 들어오도록 잡아 주세요"],
-	offscreen: ["The pulled path leaves the frame — keep it inside the dashed border", "잡아당긴 궤적이 화면을 벗어났어요 — 점선 테두리 안에 두세요"],
+	empty: ["This joint is not visible over the chosen frames — frame it in view first", "선택한 구간에서 이 관절이 보이지 않아요 — 먼저 화면 안에 들어오도록 잡아 주세요", "所选帧里看不到这个关节 — 先把它框进画面"],
+	offscreen: ["The pulled path leaves the frame — keep it inside the dashed border", "잡아당긴 궤적이 화면을 벗어났어요 — 점선 테두리 안에 두세요", "拉出的路径超出画面 — 请保持在虚线框内"],
 };
 
 // Named ingest failures, in both locales. A reason the user cannot act on is
 // not a message: each line says what was wrong with THIS source.
 export const MULTIMODEL_REASONS = {
-	"url-empty": ["Enter a video URL first", "영상 URL을 먼저 입력하세요"],
-	"url-protocol-relative": ["Use a full https:// address", "https:// 로 시작하는 전체 주소를 쓰세요"],
-	"url-scheme-unsupported": ["Only http(s) or a local /path is accepted", "http(s) 또는 로컬 /경로만 사용할 수 있어요"],
+	"url-empty": ["Enter a video URL first", "영상 URL을 먼저 입력하세요", "请先输入视频网址"],
+	"url-protocol-relative": ["Use a full https:// address", "https:// 로 시작하는 전체 주소를 쓰세요", "请使用完整的 https:// 地址"],
+	"url-scheme-unsupported": ["Only http(s) or a local /path is accepted", "http(s) 또는 로컬 /경로만 사용할 수 있어요", "只接受 http(s) 或本地 /路径"],
 	"url-platform-page": [
 		"YouTube/Vimeo pages are players, not video files, and block browser downloads. Start the dev bridge to use the URL directly, or download the clip and use Choose video.",
 		"유튜브·비메오 주소는 영상 파일이 아니라 플레이어 페이지이고 브라우저 다운로드를 막습니다. 개발 브리지를 켜면 URL을 그대로 쓸 수 있고, 아니면 영상을 내려받아 '영상 선택'을 쓰세요.",
+		"YouTube/Vimeo 页面是播放器，不是视频文件，浏览器无法下载。启动开发桥可直接用该网址，或下载片段后点“选择视频”。",
 	],
-	"url-malformed": ["That address could not be parsed", "주소를 해석할 수 없어요"],
-	"fetch-failed": ["The host refused a browser download (CORS or offline)", "호스트가 브라우저 다운로드를 거부했어요(CORS 또는 오프라인)"],
-	"not-a-video": ["That address did not return a video (check the path)", "그 주소는 영상을 반환하지 않았어요(경로를 확인하세요)"],
-	"decode-failed": ["This browser cannot decode that video", "이 브라우저가 디코딩할 수 없는 영상이에요"],
-	"duration-unreadable": ["The clip length could not be read", "클립 길이를 읽지 못했어요"],
-	"dimensions-unreadable": ["The frame size could not be read", "프레임 크기를 읽지 못했어요"],
-	"probe-timeout": ["The video never reported metadata", "영상이 메타데이터를 보내지 않았어요"],
-	"fetch-unavailable": ["This browser cannot download files", "이 브라우저는 파일을 내려받을 수 없어요"],
-	"footage-load-timeout": ["The clip never became seekable", "클립이 탐색 가능한 상태가 되지 않았어요"],
-	"seek-timeout": ["Seeking inside the clip stalled", "클립 내부 탐색이 멈췄어요"],
-	"pose-runtime-unavailable": ["The pose engine is missing from this build", "이 빌드에 포즈 엔진이 없어요"],
-	"pose-model-download-failed": ["The pose model could not be downloaded (offline?)", "포즈 모델을 내려받지 못했어요(오프라인인가요?)"],
-	"pose-engine-download-failed": ["The pose engine could not be downloaded (offline?)", "포즈 엔진을 내려받지 못했어요(오프라인인가요?)"],
-	"pose-engine-init-failed": ["The pose engine failed to start on this device", "이 기기에서 포즈 엔진을 시작하지 못했어요"],
-	"rest-unavailable": ["The rig rest data (/ardy/cskel27-rest.json) could not be loaded", "리그 레스트 데이터(/ardy/cskel27-rest.json)를 불러오지 못했어요"],
-	"no-person-found": ["No person was detected in the footage", "영상에서 사람을 감지하지 못했어요"],
-	"no-person-in-photo": ["No person was detected in that photograph", "사진에서 사람을 감지하지 못했어요"],
-	"image-load-timeout": ["The photograph never finished decoding", "사진 디코딩이 끝나지 않았어요"],
-	"pose-partly-occluded": ["Shoulders and hips must both be visible in the photograph", "사진에 어깨와 골반이 모두 보여야 해요"],
-	"no-usable-pose": ["A person was seen, but no stable pose could be fitted", "사람은 보였지만 안정적인 포즈를 만들지 못했어요"],
-	"rig-not-loaded": ["Subject 1's rig is not loaded yet", "인물 1 리그가 아직 로드되지 않았어요"],
-	"bridge-unreachable": ["The dev bridge did not answer", "개발 브리지가 응답하지 않아요"],
-	"bridge-footage-incomplete": ["The bridge stream ended without footage", "브리지 전송이 영상 없이 끝났어요"],
-	"footage-url-invalid": ["That address could not be used for a bridge download", "이 주소는 브리지 다운로드에 쓸 수 없어요"],
-	"footage-probe-failed": ["The bridge could not read that page's video info", "브리지가 그 페이지의 영상 정보를 읽지 못했어요"],
-	"footage-live-unsupported": ["Live streams have no fixed length and cannot be ingested", "라이브 스트림은 길이가 없어 인제스트할 수 없어요"],
-	"footage-too-long": ["That video is over 15 minutes — trim or pick a shorter one", "15분이 넘는 영상이에요 — 잘라내거나 더 짧은 걸 골라 주세요"],
-	"footage-download-failed": ["The bridge could not download that video", "브리지가 영상을 내려받지 못했어요"],
-	"footage-normalize-failed": ["The bridge could not convert that video for extraction", "브리지가 영상을 추출용으로 변환하지 못했어요"],
-	"footage-timeout": ["The bridge download took too long and was stopped", "브리지 다운로드가 너무 오래 걸려 중단됐어요"],
-	"bridge-extract-incomplete": ["The bridge stream ended without a take", "브리지 전송이 테이크 없이 끝났어요"],
-	"extract-host-missing": ["The bridge has no GPU box configured (CCLAY_EXTRACT_HOST)", "브리지에 GPU 박스가 설정돼 있지 않아요(CCLAY_EXTRACT_HOST)"],
-	"extract-upload-failed": ["The footage could not be copied to the GPU box", "영상을 GPU 박스로 복사하지 못했어요"],
-	"extract-upload-too-large": ["That clip is too large to upload for extraction (300 MB cap)", "추출 업로드 한도(300MB)를 넘는 영상이에요"],
-	"extract-upload-empty": ["No video bytes arrived at the bridge", "브리지에 영상 데이터가 도착하지 않았어요"],
-	"extract-footage-unknown": ["The bridge no longer holds that download — re-ingest the URL", "브리지에 그 다운로드가 더 이상 없어요 — URL을 다시 넣어 주세요"],
-	"extract-run-failed": ["SAM-3D-Body failed on the GPU box (see the bridge log)", "GPU 박스에서 SAM-3D-Body 실행이 실패했어요(브리지 로그 확인)"],
-	"extract-no-person": ["The GPU box tracked no person in that footage", "GPU 박스가 영상에서 사람을 추적하지 못했어요"],
-	"extract-convert-failed": ["The extracted take could not be converted for the timeline", "추출된 테이크를 타임라인용으로 변환하지 못했어요"],
-	"extract-timeout": ["GPU extraction took too long and was stopped", "GPU 추출이 너무 오래 걸려 중단됐어요"],
+	"url-malformed": ["That address could not be parsed", "주소를 해석할 수 없어요", "无法解析该地址"],
+	"fetch-failed": ["The host refused a browser download (CORS or offline)", "호스트가 브라우저 다운로드를 거부했어요(CORS 또는 오프라인)", "主机拒绝了浏览器下载（CORS 或离线）"],
+	"not-a-video": ["That address did not return a video (check the path)", "그 주소는 영상을 반환하지 않았어요(경로를 확인하세요)", "该地址没有返回视频（请检查路径）"],
+	"decode-failed": ["This browser cannot decode that video", "이 브라우저가 디코딩할 수 없는 영상이에요", "此浏览器无法解码该视频"],
+	"duration-unreadable": ["The clip length could not be read", "클립 길이를 읽지 못했어요", "无法读取片段时长"],
+	"dimensions-unreadable": ["The frame size could not be read", "프레임 크기를 읽지 못했어요", "无法读取画面尺寸"],
+	"probe-timeout": ["The video never reported metadata", "영상이 메타데이터를 보내지 않았어요", "视频从未返回元数据"],
+	"fetch-unavailable": ["This browser cannot download files", "이 브라우저는 파일을 내려받을 수 없어요", "此浏览器无法下载文件"],
+	"footage-load-timeout": ["The clip never became seekable", "클립이 탐색 가능한 상태가 되지 않았어요", "片段从未变为可寻址"],
+	"seek-timeout": ["Seeking inside the clip stalled", "클립 내부 탐색이 멈췄어요", "片段内寻址卡住了"],
+	"pose-runtime-unavailable": ["The pose engine is missing from this build", "이 빌드에 포즈 엔진이 없어요", "此构建缺少姿势引擎"],
+	"pose-model-download-failed": ["The pose model could not be downloaded (offline?)", "포즈 모델을 내려받지 못했어요(오프라인인가요?)", "无法下载姿势模型（是否离线？）"],
+	"pose-engine-download-failed": ["The pose engine could not be downloaded (offline?)", "포즈 엔진을 내려받지 못했어요(오프라인인가요?)", "无法下载姿势引擎（是否离线？）"],
+	"pose-engine-init-failed": ["The pose engine failed to start on this device", "이 기기에서 포즈 엔진을 시작하지 못했어요", "此设备上姿势引擎启动失败"],
+	"rest-unavailable": ["The rig rest data (/ardy/cskel27-rest.json) could not be loaded", "리그 레스트 데이터(/ardy/cskel27-rest.json)를 불러오지 못했어요", "无法加载绑定休息数据（/ardy/cskel27-rest.json）"],
+	"no-person-found": ["No person was detected in the footage", "영상에서 사람을 감지하지 못했어요", "素材里没有检测到人"],
+	"no-person-in-photo": ["No person was detected in that photograph", "사진에서 사람을 감지하지 못했어요", "照片里没有检测到人"],
+	"image-load-timeout": ["The photograph never finished decoding", "사진 디코딩이 끝나지 않았어요", "照片解码一直没完成"],
+	"pose-partly-occluded": ["Shoulders and hips must both be visible in the photograph", "사진에 어깨와 골반이 모두 보여야 해요", "照片里肩膀和髋必须都可见"],
+	"no-usable-pose": ["A person was seen, but no stable pose could be fitted", "사람은 보였지만 안정적인 포즈를 만들지 못했어요", "看到了人，但拟合不出稳定姿势"],
+	"rig-not-loaded": ["Subject 1's rig is not loaded yet", "인물 1 리그가 아직 로드되지 않았어요", "人物 1 的绑定尚未加载"],
+	"bridge-unreachable": ["The dev bridge did not answer", "개발 브리지가 응답하지 않아요", "开发桥没有应答"],
+	"bridge-footage-incomplete": ["The bridge stream ended without footage", "브리지 전송이 영상 없이 끝났어요", "桥接传输结束时没有素材"],
+	"footage-url-invalid": ["That address could not be used for a bridge download", "이 주소는 브리지 다운로드에 쓸 수 없어요", "该地址不能用于桥接下载"],
+	"footage-probe-failed": ["The bridge could not read that page's video info", "브리지가 그 페이지의 영상 정보를 읽지 못했어요", "桥无法读取该页面的视频信息"],
+	"footage-live-unsupported": ["Live streams have no fixed length and cannot be ingested", "라이브 스트림은 길이가 없어 인제스트할 수 없어요", "直播没有固定长度，无法导入"],
+	"footage-too-long": ["That video is over 15 minutes — trim or pick a shorter one", "15분이 넘는 영상이에요 — 잘라내거나 더 짧은 걸 골라 주세요", "该视频超过 15 分钟 — 请裁剪或选更短的"],
+	"footage-download-failed": ["The bridge could not download that video", "브리지가 영상을 내려받지 못했어요", "桥无法下载该视频"],
+	"footage-normalize-failed": ["The bridge could not convert that video for extraction", "브리지가 영상을 추출용으로 변환하지 못했어요", "桥无法把该视频转成可提取格式"],
+	"footage-timeout": ["The bridge download took too long and was stopped", "브리지 다운로드가 너무 오래 걸려 중단됐어요", "桥下载太久，已中止"],
+	"bridge-extract-incomplete": ["The bridge stream ended without a take", "브리지 전송이 테이크 없이 끝났어요", "桥接传输结束时没有一条镜头"],
+	"extract-host-missing": ["The bridge has no GPU box configured (CCLAY_EXTRACT_HOST)", "브리지에 GPU 박스가 설정돼 있지 않아요(CCLAY_EXTRACT_HOST)", "桥未配置 GPU 机器（CCLAY_EXTRACT_HOST）"],
+	"extract-upload-failed": ["The footage could not be copied to the GPU box", "영상을 GPU 박스로 복사하지 못했어요", "无法把素材复制到 GPU 机器"],
+	"extract-upload-too-large": ["That clip is too large to upload for extraction (300 MB cap)", "추출 업로드 한도(300MB)를 넘는 영상이에요", "该片段太大，超过提取上传上限（300 MB）"],
+	"extract-upload-empty": ["No video bytes arrived at the bridge", "브리지에 영상 데이터가 도착하지 않았어요", "桥没有收到视频数据"],
+	"extract-footage-unknown": ["The bridge no longer holds that download — re-ingest the URL", "브리지에 그 다운로드가 더 이상 없어요 — URL을 다시 넣어 주세요", "桥已不再保存该下载 — 请重新导入网址"],
+	"extract-run-failed": ["SAM-3D-Body failed on the GPU box (see the bridge log)", "GPU 박스에서 SAM-3D-Body 실행이 실패했어요(브리지 로그 확인)", "GPU 机器上 SAM-3D-Body 失败（见桥日志）"],
+	"extract-no-person": ["The GPU box tracked no person in that footage", "GPU 박스가 영상에서 사람을 추적하지 못했어요", "GPU 机器在素材里没有跟踪到人"],
+	"extract-convert-failed": ["The extracted take could not be converted for the timeline", "추출된 테이크를 타임라인용으로 변환하지 못했어요", "提取的镜头无法转成时间轴格式"],
+	"extract-timeout": ["GPU extraction took too long and was stopped", "GPU 추출이 너무 오래 걸려 중단됐어요", "GPU 提取太久，已中止"],
 };
 
 // Extraction samples and bakes straight onto the production clock — an
@@ -2607,7 +2608,7 @@ export function loadSceneStartup() {
 				document,
 				saveBlocked: true,
 				error: null,
-				toast: ko("Saved scenes were written by a newer CozyClay — they have been left untouched and this session will not save", "저장된 장면은 더 최신 CozyClay에서 만들어졌어요. 이 세션에서는 건드리지 않고 저장도 하지 않습니다."),
+				toast: ko("Saved scenes were written by a newer CozyClay — they have been left untouched and this session will not save", "저장된 장면은 더 최신 CozyClay에서 만들어졌어요. 이 세션에서는 건드리지 않고 저장도 하지 않습니다.", "已存场景是更新版 CozyClay 写的 — 本会话不会改动它们，也不会保存"),
 			};
 		}
 		const document = result.document;
@@ -2622,9 +2623,9 @@ export function loadSceneStartup() {
 			// funnel's "scene created" step never fires for a brand-new room.
 			startupCreatedScene: result.status === "absent" || result.status === "corrupt",
 			toast: result.status === "corrupt"
-				? ko(`Saved scenes were unreadable — starting fresh; the old data is kept under ${SCENES_QUARANTINE_KEY}`, `저장된 장면을 읽을 수 없어 새로 시작합니다. 기존 데이터는 ${SCENES_QUARANTINE_KEY}에 보관했어요.`)
+				? ko(`Saved scenes were unreadable — starting fresh; the old data is kept under ${SCENES_QUARANTINE_KEY}`, `저장된 장면을 읽을 수 없어 새로 시작합니다. 기존 데이터는 ${SCENES_QUARANTINE_KEY}에 보관했어요.`, `已存场景无法读取 — 将重新开始；旧数据保留在 ${SCENES_QUARANTINE_KEY}`)
 				: result.dropped > 0
-					? (isKo ? `저장된 장면 ${result.dropped}개를 복원하지 못했어요` : `${result.dropped} saved scene(s) could not be restored`)
+					? ko(`${result.dropped} saved scene(s) could not be restored`, `저장된 장면 ${result.dropped}개를 복원하지 못했어요`, `${result.dropped} 个已存场景无法恢复`)
 					: null,
 		};
 	} catch {

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Korean option locale verification.
 //
-// English is always the default UI; Korean is opt-in only when the saved
-// localStorage choice is "ko". Browser language must never select it. This
+// Chinese is the default UI; English and Korean are opt-in via the saved
+// localStorage choice. Browser language must never select it. This
 // harness is a static file check, so it cannot set localStorage before the
 // page loads and locale.js exposes no URL/script injection hook. Instead:
 //   1. import locale.js in node with a polyfilled localStorage to exercise
-//      both the en default and the ko option through ko() deterministically;
+//      the zh default and the en/ko options through ko() deterministically;
 //   2. verify Korean UI copy survives in the source, but only inside
-//      ko("en", "ko") pairs, isKo branches, or the *_KO mapping tables.
+//      ko("en", "ko", "zh") pairs, isKo/isZh branches, or the *_KO mapping tables.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -27,7 +27,7 @@ function includesAll(path, values) {
 // Korean option.
 function assertKoPairsHaveBothSides(path) {
 	const text = source(path);
-	const pairs = [...text.matchAll(/ko\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"\s*\)/g)];
+	const pairs = [...text.matchAll(/ko\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"(?:\s*,\s*"((?:[^"\\]|\\.)*)")?\s*\)/g)];
 	assert.ok(pairs.length > 0, `${path} has no ko("en", "ko") pairs to verify`);
 	for (const [, en, koText] of pairs) {
 		assert.ok(en.trim(), `${path} has an empty English default in ko(): ${koText}`);
@@ -46,8 +46,8 @@ function assertKoreanInsideLocaleConstructs(path) {
 		if (inKoTable && /^\s*};?\s*$/.test(line)) inKoTable = false;
 		if (!/[\uAC00-\uD7AF]/.test(line.replace(/\/\/.*$/, ""))) continue;
 		assert.ok(
-			inKoTable || /ko\(/.test(line) || /\bisKo\b/.test(line),
-			`${path}:${index + 1} — Korean UI copy outside ko()/isKo/KO table: ${line.trim()}`
+			inKoTable || /ko\(/.test(line) || /\bisKo\b/.test(line) || /\bisZh\b/.test(line),
+			`${path}:${index + 1} — Korean UI copy outside ko()/isKo/isZh/KO table: ${line.trim()}`
 		);
 	}
 }
@@ -86,30 +86,39 @@ async function loadLocaleModule(storedValue, browserLanguage = "ko-KR", storageT
 }
 
 const defaultOnKoreanBrowser = await loadLocaleModule(null, "ko-KR");
-assert.equal(defaultOnKoreanBrowser.LOCALE, "en", "a Korean browser still starts in English without a saved choice");
+assert.equal(defaultOnKoreanBrowser.LOCALE, "zh", "a Korean browser still starts in Chinese without a saved choice");
 assert.equal(defaultOnKoreanBrowser.isKo, false);
+assert.equal(defaultOnKoreanBrowser.isZh, true);
 
 const invalidStoredLocale = await loadLocaleModule("ko-KR", "ko-KR");
-assert.equal(invalidStoredLocale.LOCALE, "en", "an invalid stored value falls back to English");
+assert.equal(invalidStoredLocale.LOCALE, "zh", "an invalid stored value falls back to Chinese");
 
 const unavailableStorageLocale = await loadLocaleModule(null, "ko-KR", true);
-assert.equal(unavailableStorageLocale.LOCALE, "en", "unavailable storage falls back to English");
+assert.equal(unavailableStorageLocale.LOCALE, "zh", "unavailable storage falls back to Chinese");
 
 const localeSource = source("src/locale.js");
 assert.doesNotMatch(localeSource, /navigator\.language/, "browser language must not choose the default locale");
-assert.match(localeSource, /stored\(\) \?\? "en"/, "English remains the no-choice fallback");
+assert.match(localeSource, /stored\(\) \?\? "zh"/, "Chinese remains the no-choice fallback");
 
 const enLocale = await loadLocaleModule("en");
 assert.equal(enLocale.LOCALE, "en");
 assert.equal(enLocale.isKo, false);
-assert.equal(enLocale.ko("Frame", "프레임"), "Frame");
-assert.equal(enLocale.ko("Collapse timeline", "타임라인 접기"), "Collapse timeline");
+assert.equal(enLocale.isZh, false);
+assert.equal(enLocale.ko("Frame", "프레임", "帧"), "Frame");
+assert.equal(enLocale.ko("Collapse timeline", "타임라인 접기", "折叠时间线"), "Collapse timeline");
 
 const koLocale = await loadLocaleModule("ko");
 assert.equal(koLocale.LOCALE, "ko");
 assert.equal(koLocale.isKo, true);
-assert.equal(koLocale.ko("Frame", "프레임"), "프레임");
-assert.equal(koLocale.ko("Collapse timeline", "타임라인 접기"), "타임라인 접기");
+assert.equal(koLocale.ko("Frame", "프레임", "帧"), "프레임");
+assert.equal(koLocale.ko("Collapse timeline", "타임라인 접기", "折叠时间线"), "타임라인 접기");
+
+const zhLocale = await loadLocaleModule("zh");
+assert.equal(zhLocale.LOCALE, "zh");
+assert.equal(zhLocale.isZh, true);
+assert.equal(zhLocale.ko("Frame", "프레임", "帧"), "帧");
+assert.equal(zhLocale.ko("Collapse timeline", "타임라인 접기", "折叠时间线"), "折叠时间线");
+assert.equal(zhLocale.ko("Frame", "프레임"), "Frame", "missing Chinese falls back to English");
 
 // Files converted to the English-default + Korean-option pattern.
 for (const path of ["src/result-modal.jsx", "src/hierarchy-panel.jsx", "src/object-catalog.jsx", "src/error-boundary.jsx"]) {
@@ -118,7 +127,7 @@ for (const path of ["src/result-modal.jsx", "src/hierarchy-panel.jsx", "src/obje
 }
 
 // The PR's Korean copy is preserved, now living inside the locale constructs.
-includesAll("src/locale-toggle.jsx", ["한국어로 전환", "한국어", "Switch to English"]);
+includesAll("src/locale-toggle.jsx", ["한국어로 전환", "한국어", "Switch to English", "切换到中文", "中文"]);
 includesAll("src/result-modal.jsx", ["장면이 준비됐어요", "프롬프트 복사", "프레임 다운로드", "AI에 넣는 순서", "AI에 이미지 첨부"]);
 includesAll("src/App.jsx", ["장면", "재생 보기", "속성", "모션 생성", "변환", "카메라 레일 완성", "연결 중…"]);
 includesAll("src/ardy/client.js", ["브리지 상태가 좋지 않아요", "브리지에 연결할 수 없어요", "생성 응답에 본문 스트림이 없어요"]);

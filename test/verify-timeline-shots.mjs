@@ -25,7 +25,7 @@ assert.ok(timeline.includes("onShotRemove"));
 assert.ok(timeline.includes("onShotDuplicate"));
 assert.ok(timeline.includes("onShotCut"));
 assert.ok(timeline.includes("onShotSplit"));
-assert.ok(timeline.includes('ko("+ Add shot", "+ 샷 추가")'));
+assert.ok(timeline.includes('ko("+ Add shot", "+ 샷 추가"'));
 assert.ok(timeline.includes('className="tl-shot-empty"'));
 assert.ok(timeline.includes('className="tl-shot-camera-summary"'));
 assert.ok(timeline.includes('className="tl-shot-key-surface"'));

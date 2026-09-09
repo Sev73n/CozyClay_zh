@@ -6,7 +6,7 @@ import { poseThumbnail, warmThumbnailModels } from "./pose-thumbs.js";
 import { IK_TRACKS, MID_TRACKS, ikControlIsExposed } from "./ardy/ik.js";
 import { shouldRefreshIkExposure } from "./use-render-activity.js";
 import { POSER_LAYER } from "./dualview.jsx";
-import { ko, isKo } from "./locale.js";
+import { ko } from "./locale.js";
 
 /** Same normalised-name match rule as poses.js: equal, or one is a suffix of
  * the other, so `mixamorig:LeftArm`, `mixamorigLeftArm` and `LeftArm` all hit. */
@@ -1145,30 +1145,30 @@ export function warmPoseThumbnails() {
 
 export function PoseStudioPanel({ subject, model, poses, selectedId, onSelect, onApply, onReset, onSave, onDelete, onClose, closing, motionActive = false, ikCorrection = false, docked = false, onPhoto, photoState = "idle", photoError = "" }) {
 	const poseLabelsKo = {
-		"T-pose": ko("T-pose", "T 포즈"),
-		Relaxed: ko("Relaxed", "편안한 자세"),
-		Contrapposto: ko("Contrapposto", "콘트라포스토"),
-		Walking: ko("Walking", "걷는 자세"),
-		Seated: ko("Seated", "앉은 자세"),
-		"Arms crossed": ko("Arms crossed", "팔짱"),
-		Pointing: ko("Pointing", "가리키기"),
-		"Hands on hips": ko("Hands on hips", "허리에 손"),
-		"Looking back": ko("Looking back", "뒤돌아보기"),
-		"Hands up": ko("Hands up", "손 올리기"),
-		Wave: ko("Wave", "손 흔들기"),
-		Thinking: ko("Thinking", "생각하기"),
-		Crouch: ko("Crouch", "웅크리기"),
-		Kneel: ko("Kneel", "무릎 꿇기"),
-		Run: ko("Run", "달리기"),
-		Jump: ko("Jump", "점프"),
+		"T-pose": ko("T-pose", "T 포즈", "T 姿势"),
+		Relaxed: ko("Relaxed", "편안한 자세", "放松站姿"),
+		Contrapposto: ko("Contrapposto", "콘트라포스토", "对立站姿"),
+		Walking: ko("Walking", "걷는 자세", "走姿"),
+		Seated: ko("Seated", "앉은 자세", "坐姿"),
+		"Arms crossed": ko("Arms crossed", "팔짱", "抱臂"),
+		Pointing: ko("Pointing", "가리키기", "指向"),
+		"Hands on hips": ko("Hands on hips", "허리에 손", "叉腰"),
+		"Looking back": ko("Looking back", "뒤돌아보기", "回望"),
+		"Hands up": ko("Hands up", "손 올리기", "举手"),
+		Wave: ko("Wave", "손 흔들기", "挥手"),
+		Thinking: ko("Thinking", "생각하기", "思考中"),
+		Crouch: ko("Crouch", "웅크리기", "蹲下"),
+		Kneel: ko("Kneel", "무릎 꿇기", "跪下"),
+		Run: ko("Run", "달리기", "跑"),
+		Jump: ko("Jump", "점프", "跳"),
 	};
 	const categoryLabelsKo = {
-		all: ko("All", "전체"),
-		basic: ko("Basic", "기본"),
-		gesture: ko("Gesture", "제스처"),
-		action: ko("Action", "동작"),
-		floor: ko("Floor", "바닥"),
-		custom: ko("My poses", "내 포즈"),
+		all: ko("All", "전체", "全部"),
+		basic: ko("Basic", "기본", "基础"),
+		gesture: ko("Gesture", "제스처", "手势"),
+		action: ko("Action", "동작", "动作"),
+		floor: ko("Floor", "바닥", "地面"),
+		custom: ko("My poses", "내 포즈", "我的姿势"),
 	};
 	const displayPoseLabel = (pose) => pose.custom ? pose.label : poseLabelsKo[pose.label] ?? pose.label;
 	const poseCategory = (pose) => pose.custom ? "custom" : pose.category ?? "basic";
@@ -1186,30 +1186,30 @@ export function PoseStudioPanel({ subject, model, poses, selectedId, onSelect, o
 	return (
 		<div className={"pose-studio" + (docked ? " docked" : "") + (closing ? " closing" : "")}>
 			<div className="studio-head">
-				<span>{isKo ? `포즈 스튜디오 · 인물 ${subject}` : `Pose Studio · Subject ${subject}`}</span>
-				<button type="button" className="x" onClick={onClose} aria-label={ko("Close pose studio", "포즈 스튜디오 닫기")}>
+				<span>{ko(`Pose Studio · Subject ${subject}`, `포즈 스튜디오 · 인물 ${subject}`, `姿势工作室 · 人物 ${subject}`)}</span>
+				<button type="button" className="x" onClick={onClose} aria-label={ko("Close pose studio", "포즈 스튜디오 닫기", "关闭姿势工作室")}>
 					✕
 				</button>
 			</div>
 			{motionActive && (
 				<p className="studio-hint" data-pose-motion-warning role="status">
 					{ikCorrection
-						? ko("IK mode is on — applying keys the pose as a full-body correction at the current frame; the motion stays.", "IK 모드가 켜져 있어요 — 적용하면 현재 프레임에 전신 보정 키로 들어가고, 모션은 그대로 유지됩니다.")
-						: ko("A sample motion is moving the character — applying a pose clears it and returns to the blocking pose.", "현재 샘플 모션이 캐릭터를 움직이고 있어요. 포즈를 눈앞에 적용하려면 샘플 모션을 지우고 블로킹 포즈로 전환합니다.")}
+						? ko("IK mode is on — applying keys the pose as a full-body correction at the current frame; the motion stays.", "IK 모드가 켜져 있어요 — 적용하면 현재 프레임에 전신 보정 키로 들어가고, 모션은 그대로 유지됩니다.", "IK 模式已开 — 应用会把姿势作为全身修正打在当前帧；动作还在。")
+						: ko("A sample motion is moving the character — applying a pose clears it and returns to the blocking pose.", "현재 샘플 모션이 캐릭터를 움직이고 있어요. 포즈를 눈앞에 적용하려면 샘플 모션을 지우고 블로킹 포즈로 전환합니다.", "现在有示例动作在带动人物 — 应用姿势会清掉它，回到走位姿势。")}
 				</p>
 			)}
 			<div className="studio-actions">
 				<button type="button" className="btn primary full" data-pose-apply onClick={() => onApply(selectedIdRef.current)}>
 					{motionActive
-						? (ikCorrection ? ko("Key pose as IK correction", "포즈를 IK 보정 키로 적용") : ko("Clear motion and apply pose", "모션 지우고 포즈 적용"))
-						: ko("Apply pose", "포즈 적용")}
+						? (ikCorrection ? ko("Key pose as IK correction", "포즈를 IK 보정 키로 적용", "把姿势记成 IK 修正") : ko("Clear motion and apply pose", "모션 지우고 포즈 적용", "清除动作并应用姿势"))
+						: ko("Apply pose", "포즈 적용", "应用姿势")}
 				</button>
 				<button type="button" className="btn ghost full" onClick={onReset}>
-					{ko("Reset pose", "포즈 초기화")}
+					{ko("Reset pose", "포즈 초기화", "重置姿势")}
 				</button>
 			</div>
 			{categories.length > 2 && (
-				<div className="studio-filters" aria-label={ko("Pose categories", "포즈 카테고리")}>
+				<div className="studio-filters" aria-label={ko("Pose categories", "포즈 카테고리", "姿势分类")}>
 					{categories.map((item) => (
 						<button
 							type="button"
@@ -1228,6 +1228,7 @@ export function PoseStudioPanel({ subject, model, poses, selectedId, onSelect, o
 					{ko(
 						"Your pose library is empty. Read a pose out of a photograph, or pose the character and save it — both stay here for every project.",
 						"포즈 라이브러리가 비어 있어요. 사진에서 자세를 읽어오거나 캐릭터 자세를 잡아 저장하면, 모든 프로젝트에서 계속 쓸 수 있어요.",
+						"姿势库是空的。从照片读取姿势，或摆好人物再保存 — 两种都会留在这里，每个项目都能用。",
 					)}
 				</p>
 			)}
@@ -1287,7 +1288,7 @@ export function PoseTileGrid({
 						{pose.custom && onDelete && (
 							<em
 								className="del"
-								title={ko("Delete", "삭제")}
+								title={ko("Delete", "삭제", "删除")}
 								onClick={(e) => {
 									e.stopPropagation();
 									onDelete(pose.id);
@@ -1299,9 +1300,9 @@ export function PoseTileGrid({
 					</button>
 				))}
 				{onSave && (
-				<button type="button" className="pose-tile add" data-pose-id="save-custom" title={ko("Save the character's current pose", "현재 캐릭터 포즈 저장")} onClick={onSave}>
+				<button type="button" className="pose-tile add" data-pose-id="save-custom" title={ko("Save the character's current pose", "현재 캐릭터 포즈 저장", "保存人物当前姿势")} onClick={onSave}>
 					<span className="add-plus">＋</span>
-					<span className="add-text">{ko("Save pose", "포즈 저장")}</span>
+					<span className="add-text">{ko("Save pose", "포즈 저장", "保存姿势")}</span>
 				</button>
 				)}
 				{onPhoto && (
@@ -1311,12 +1312,12 @@ export function PoseTileGrid({
 						data-pose-id="photo-pose"
 						data-photo-state={photoState}
 						disabled={photoState === "running"}
-						title={ko("Read the pose out of a reference photograph", "참조 사진에서 자세 읽어오기")}
+						title={ko("Read the pose out of a reference photograph", "참조 사진에서 자세 읽어오기", "从参考照片读取姿势")}
 						onClick={onPhoto}
 					>
 						<span className="add-plus">{photoState === "running" ? "◌" : "◳"}</span>
 						<span className="add-text">
-							{photoState === "running" ? ko("Reading…", "읽는 중…") : ko("From photo", "사진에서")}
+							{photoState === "running" ? ko("Reading…", "읽는 중…", "读取中…") : ko("From photo", "사진에서", "从照片")}
 						</span>
 					</button>
 				)}

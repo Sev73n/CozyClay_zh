@@ -342,20 +342,6 @@ select {
 	text-overflow: ellipsis;
 }
 
-.hierarchy-project button {
-	padding: 3px 9px;
-	font-size: 11px;
-	border-radius: 6px;
-	border: 1px solid var(--line2);
-	background: var(--card2);
-	color: var(--fg);
-	cursor: pointer;
-}
-
-.hierarchy-project button:hover {
-	border-color: var(--accent);
-}
-
 /* Project browser modal */
 .project-browser-backdrop {
 	position: fixed;
@@ -835,55 +821,6 @@ select {
 	flex: 1;
 }
 
-.locale-toggle {
-	display: inline-flex;
-	align-items: center;
-	height: 28px;
-	padding: 0 10px;
-	border: 1px solid var(--line2);
-	border-radius: 2px;
-	background: #2c2c2c;
-	color: var(--fg);
-	font-size: 10px;
-	font-weight: 620;
-	cursor: pointer;
-}
-
-.locale-toggle:hover,
-.locale-toggle:focus-visible {
-	border-color: var(--accent);
-	background: var(--accent-soft);
-	outline: none;
-}
-
-/* Auto color: same chrome as the locale toggle; pressed state carries the
-   accent so "the viewport is recolored right now" is visible at a glance. */
-.auto-color-toggle {
-	display: inline-flex;
-	align-items: center;
-	height: 28px;
-	padding: 0 10px;
-	border: 1px solid var(--line2);
-	border-radius: 2px;
-	background: #2c2c2c;
-	color: var(--fg);
-	font-size: 10px;
-	font-weight: 620;
-	cursor: pointer;
-}
-
-.auto-color-toggle:hover,
-.auto-color-toggle:focus-visible {
-	border-color: var(--accent);
-	background: var(--accent-soft);
-	outline: none;
-}
-
-.auto-color-toggle[aria-pressed="true"] {
-	border-color: var(--accent);
-	background: var(--accent-soft);
-}
-
 .auto-color-hex {
 	align-self: center;
 	font-size: 10px;
@@ -1138,6 +1075,9 @@ select {
 .app[data-embed-mode="playview"] .bottom-window {
 	display: none;
 }
+.app[data-embed-mode="playview"] .agent-panel {
+	display: none;
+}
 .app[data-embed-mode="playview"] .main,
 .app[data-embed-mode="playview"] .workspace,
 .app[data-embed-mode="playview"] .viewport {
@@ -1153,6 +1093,76 @@ select {
 	inset: 0;
 	width: 100%;
 	height: 100%;
+}
+
+/* The landing page's playground iframe: the viewport, a one-row transport,
+   the Shots lane (the camera tutorial adds a shot and draws its rail) and the
+   shot monitor stay; project chrome, hierarchy, inspector and the other lanes go. */
+.app[data-embed-mode="playground"] {
+	width: 100vw;
+	height: 100vh;
+	min-width: 0;
+	overflow: hidden;
+}
+.app[data-embed-mode="playground"] .topbar,
+.app[data-embed-mode="playground"] .brandbar,
+.app[data-embed-mode="playground"] .asset-delete-toast,
+.app[data-embed-mode="playground"] .hierarchy-left,
+.app[data-embed-mode="playground"] .hierarchy-sidebar,
+.app[data-embed-mode="playground"] .workspace-splitter,
+.app[data-embed-mode="playground"] .bottom-window-tabs,
+.app[data-embed-mode="playground"] .take-bar,
+.app[data-embed-mode="playground"] .tl-pose-tools,
+.app[data-embed-mode="playground"] .tl-motion-tools,
+.app[data-embed-mode="playground"] .tl-badge,
+.app[data-embed-mode="playground"] .tl-toggle,
+.app[data-embed-mode="playground"] .tl-track:not(.shots),
+.app[data-embed-mode="playground"] .vp-inset-tag:not(.vp-shot-preview-tag) {
+	display: none;
+}
+.app[data-embed-mode="playground"] .tl-view-tools { display: none !important; }
+/* Title bar keeps nothing but the pane's own name: the drawn dolly plays
+   full-screen through the shot camera's look-through button, and Esc is the
+   way back to flying. */
+.app[data-embed-mode="playground"] .viewport-titlebar .workflow-mode-switch,
+.app[data-embed-mode="playground"] .viewport-titlebar .editor-toolbar { display: none !important; }
+/* The plan inset only matters while a rail is being drawn into it. */
+.app[data-embed-mode="playground"]:not([data-rail-draw="1"]) .vp-inset.plan { display: none !important; }
+.app[data-embed-mode="playground"][data-rail-draw="1"] .vp-inset.plan { width: 44% !important; height: 62% !important; }
+.app[data-embed-mode="playground"] .bottom-window,
+.app[data-embed-mode="playground"] .bottom-timeline {
+	flex: 0 0 auto;
+	height: auto !important;
+	min-height: 0;
+}
+.app[data-embed-mode="playground"] .timeline,
+.app[data-embed-mode="playground"] .timeline.empty-shots { height: auto !important; min-height: 0 !important; max-height: none; }
+.app[data-embed-mode="playground"] .tl-body { flex: 0 0 auto; overflow: hidden; }
+.app[data-embed-mode="playground"] .tl-body { min-height: 0 !important; height: auto !important; }
+.app[data-embed-mode="playground"] .tl-surface { height: auto !important; min-height: 0; grid-template-rows: auto auto !important; }
+/* The Shots lane keeps its full-studio height so the block's hover actions
+   (Duplicate / Delete) sit in a strip above the clickable body instead of
+   covering it. */
+.app[data-embed-mode="playground"] .tl-track.shots { height: 68px; min-height: 68px; }
+.app[data-embed-mode="playground"] .tl-head { padding: 6px 10px; }
+.app[data-embed-mode="playground"] .viewport { flex: 1 1 auto; }
+/* The shot monitor is the pane the tutorial points at: keep it small. */
+.app[data-embed-mode="playground"] .vp-shot-preview { width: 22% !important; height: auto !important; aspect-ratio: 16 / 9; right: 12px; bottom: 12px; }
+.app[data-embed-mode="playground"] .vp-shot-preview-tag { font-size: 12px; }
+.app[data-embed-mode="playground"] .vp-look-through { width: 24px; height: 24px; }
+.app[data-embed-mode="playground"] .vp-look-through svg { width: 15px; height: 15px; }
+/* Tutorial hints: the landing page names the control the current step needs. */
+.app[data-playground-hint="look"] .vp-look-through,
+.app[data-playground-hint="shot"] .tl-track.shots .tl-track-add,
+.app[data-playground-hint="rail"] .tl-track.shots .tl-shot-block:not(.selected),
+.app[data-playground-hint="rail"] .tl-rail-draw,
+.app[data-playground-hint="play"] .tl-transport button:nth-child(2) {
+	animation: playground-pulse 1.1s ease-in-out infinite;
+	box-shadow: 0 0 0 2px #d9a066;
+}
+@keyframes playground-pulse {
+	0%, 100% { box-shadow: 0 0 0 2px #d9a066; }
+	50% { box-shadow: 0 0 0 7px rgba(217, 160, 102, 0); }
 }
 
 /* ------------------------------------------------------- dual viewport ---- */
@@ -2072,46 +2082,17 @@ select {
 	font-size: 8px;
 }
 
-.scene-switcher {
-	flex: none;
-	padding: 8px 9px 7px;
-	border-bottom: 1px solid rgba(255, 255, 255, .065);
-	background: rgba(8, 10, 14, .32);
-}
-
-.scene-switcher-heading,
-.scene-switcher-heading > div,
-.scene-actions {
-	display: flex;
-	align-items: center;
-}
-
 /* Disclosures that keep a once-in-a-while control out of the permanent
    furniture: a summary you can read, a panel that opens where it stands. */
-.scene-actions-pop > summary,
 .object-colors-pop > summary {
 	cursor: pointer;
 	list-style: none;
 }
 
-.scene-actions-pop > summary::-webkit-details-marker,
 .object-colors-pop > summary::-webkit-details-marker { display: none; }
-
-.scene-actions-pop > summary {
-	padding: 3px 8px;
-	border: 1px solid rgba(126, 154, 255, .2);
-	border-radius: 6px;
-	color: #9fb0d8;
-	font-size: 11px;
-	width: max-content;
-}
-
-.scene-actions-pop[open] > summary { color: #d7e2ff; }
-.scene-actions-pop .scene-actions { margin-top: 5px; }
 
 /* A closed <details> hides its children by display alone, so any child that
    sets its own display walks straight back out of the box. */
-.scene-actions-pop:not([open]) .scene-actions,
 .object-colors-pop:not([open]) .object-colors,
 .tl-camera-advanced:not([open]) > label,
 .tl-camera-advanced:not([open]) > button { display: none; }
@@ -2194,81 +2175,6 @@ select {
 	outline-offset: 0;
 }
 
-.scene-switcher-heading {
-	justify-content: space-between;
-	gap: 8px;
-	margin-bottom: 6px;
-}
-
-.scene-switcher-heading > div { gap: 6px; min-width: 0; }
-.scene-switcher-heading strong { color: var(--fg); font-size: 10px; }
-.scene-switcher-heading span { color: var(--muted); font-size: 8px; }
-
-.scene-create-button,
-.scene-actions button {
-	border: 1px solid rgba(126, 154, 255, .2);
-	border-radius: 5px;
-	background: rgba(87, 111, 221, .09);
-	color: #aebade;
-	font: inherit;
-	font-size: 9px;
-	cursor: pointer;
-}
-
-.scene-create-button { height: 24px; padding: 0 8px; }
-.scene-create-button:hover,
-.scene-actions button:hover:not(:disabled) { background: rgba(87, 111, 221, .18); color: var(--fg); }
-
-.scene-list {
-	max-height: 76px;
-	overflow: auto;
-	border: 1px solid rgba(255, 255, 255, .07);
-	border-radius: 6px;
-	background: rgba(0, 0, 0, .12);
-}
-
-.scene-list-item { height: 27px; padding: 2px; }
-.scene-list-item + .scene-list-item { border-top: 1px solid rgba(255, 255, 255, .045); }
-.scene-list-item > button {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	width: 100%;
-	height: 23px;
-	padding: 0 7px;
-	border: 0;
-	border-radius: 4px;
-	background: transparent;
-	color: var(--muted);
-	font: inherit;
-	font-size: 10px;
-	text-align: left;
-	cursor: pointer;
-}
-
-.scene-list-item.active > button { background: rgba(87, 111, 221, .16); color: var(--fg); }
-.scene-document-icon {
-	width: 15px;
-	height: 15px;
-	color: #8fa8ff;
-}
-.scene-rename-input {
-	width: 100%;
-	height: 23px;
-	padding: 0 7px;
-	border: 1px solid #627cd0;
-	border-radius: 4px;
-	outline: none;
-	background: #161b29;
-	color: var(--fg);
-	font: inherit;
-	font-size: 10px;
-}
-
-.scene-actions { justify-content: flex-end; gap: 4px; margin-top: 5px; }
-.scene-actions button { height: 21px; padding: 0 7px; }
-.scene-actions button:disabled { opacity: .35; cursor: not-allowed; }
-
 .hierarchy-tree {
 	flex: 1;
 	min-height: 0;
@@ -2323,6 +2229,14 @@ select {
 
 .hierarchy-toggle.placeholder { pointer-events: none; }
 
+/* The scene root has no fold caret — folding it would hide the whole scene
+   (docs/studio-ui-ia.md R6) — but the row still reserves the caret column so
+   its icon lines up with the rows below it. */
+.hierarchy-fold-space {
+	flex: 0 0 20px;
+	pointer-events: none;
+}
+
 .hierarchy-row {
 	flex: 1;
 	min-width: 0;
@@ -2332,6 +2246,13 @@ select {
 	padding-right: 6px;
 	text-align: left;
 	cursor: default;
+}
+
+/* The scene root row: its name lives in the pill beside it, so the row itself
+   shrinks to its icon instead of holding an empty stretch of label. */
+.hierarchy-row.icon-only {
+	flex: none;
+	padding-right: 0;
 }
 
 .hierarchy-icon {
@@ -2382,6 +2303,69 @@ select {
 	color: #8f97a9;
 	font-size: 7px;
 	text-align: center;
+}
+
+/* Scene selector on the tree root row (#192). The root row already IS the
+   active scene document, so its name carries the document switcher instead of
+   a second Scenes block above the tree. The pill is its own box, right of the
+   label and far from the expand caret, so the two never read as one control.
+   Selectors are row-scoped so the panel's compact sizing wins over the shared
+   `.dropdown .trigger` field styling further down the sheet. */
+.hierarchy-row-wrap .hierarchy-scene-pill {
+	/* Wide enough that the portaled list it sizes still fits a scene name and
+	   its tick mark (the menu takes the trigger's width), but never more than
+	   half the row: on a narrowed column the row's own name keeps its space. */
+	flex: 0 1 122px;
+	max-width: calc(100% - 52px);
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	margin: 0 4px 0 6px;
+}
+
+.hierarchy-row-wrap .hierarchy-scene-pill .dropdown { width: 100%; }
+
+.hierarchy-row-wrap .hierarchy-scene-pill .trigger {
+	width: 100%;
+	min-width: 0;
+	height: 19px;
+	gap: 4px;
+	padding: 0 7px;
+	border: 1px solid var(--line2);
+	border-radius: 999px;
+	background: var(--card2);
+	color: var(--muted);
+	font-size: 10px;
+}
+
+.hierarchy-row-wrap .hierarchy-scene-pill .trigger:hover {
+	border-color: var(--accent);
+	color: var(--fg);
+}
+
+.hierarchy-row-wrap .hierarchy-scene-pill .dropdown.open .trigger {
+	border-color: var(--accent);
+	background: var(--hover);
+	color: var(--fg);
+	box-shadow: 0 0 0 1px var(--accent);
+}
+
+.hierarchy-row-wrap .hierarchy-scene-pill .dd-caret {
+	width: 10px;
+	height: 10px;
+}
+
+.hierarchy-row-wrap.selected .hierarchy-scene-pill .trigger { color: var(--fg); }
+
+/* Why a scene edit was refused (the last scene cannot be deleted), said in
+   the panel that refused it. */
+.hierarchy-scene-hint {
+	flex: none;
+	margin: 0;
+	padding: 0 10px 8px;
+	color: var(--muted);
+	font-size: 10px;
+	line-height: 1.4;
 }
 
 .inspector-heading {
@@ -5210,6 +5194,14 @@ input[type=range]::-moz-range-thumb {
 	color: #ffd166;
 }
 
+/* A tool group with nothing to offer yet says why, in the same quiet voice
+   the timeline head uses for its other hints. */
+.tl-pose-hint {
+	font-size: 10.5px;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
 .tl-playhead {
 	position: absolute;
 	top: 0;
@@ -6944,11 +6936,6 @@ input[type=range]::-moz-range-thumb {
 	cursor: default;
 }
 
-.move-ab .btn.rec-live {
-	color: #e2574d;
-	border-color: rgba(226, 87, 77, 0.6);
-}
-
 .move-slate {
 	margin: 4px 0 10px;
 	font-size: 10.5px;
@@ -7742,7 +7729,9 @@ input[type=range]::-moz-range-thumb {
 	padding-top: 13px;
 }
 
-/* Unity pane tabs (Scene / PlayView) — the pane's title strip */
+/* The pane's title strip: mode tabs on the left, scene tools filling the rest.
+   The Scene/PlayView centre tabs that named this strip are gone (#195) — the
+   framed player is an internal state now, entered from the shot PiP. */
 .viewport-titlebar {
 	position: absolute;
 	top: 0;
@@ -7819,37 +7808,7 @@ input[type=range]::-moz-range-thumb {
 .app[data-workflow-mode="camera"] .tl-motion-tools,
 .app[data-workflow-mode="camera"] .take-bar { display: none !important; }
 
-.pane-tabs {
-	position: static;
-	flex: none;
-	display: flex;
-}
-
-.pane-tabs button {
-	height: 26px;
-	padding: 0 14px;
-	border: 0;
-	border-right: 1px solid var(--line);
-	border-bottom: 2px solid transparent;
-	background: var(--panel);
-	color: var(--muted);
-	font: inherit;
-	font-size: 11px;
-	font-weight: 600;
-	cursor: pointer;
-}
-
-.pane-tabs button:hover {
-	color: var(--fg);
-}
-
-.pane-tabs button.active {
-	background: #232323;
-	color: var(--fg);
-	border-bottom-color: #3a7cbf;
-}
-
-/* the Shot/Top-View toggle sits right of the pane tabs in Scene view */
+/* the Shot/Top-View toggle sits right of the mode tabs in Scene view */
 .viewport .viewmode.scene-only {
 	top: 0;
 	left: 168px;
@@ -8106,26 +8065,6 @@ input[type=range]::-moz-range-thumb {
 	width: 13px;
 	height: 13px;
 	flex: none;
-}
-
-.playview-empty {
-	position: absolute;
-	inset: 0;
-	z-index: 7;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 6px;
-	pointer-events: none;
-	color: var(--muted);
-	font-size: 12px;
-}
-
-.playview-empty strong {
-	color: var(--fg);
-	font-size: 14px;
-	font-weight: 600;
 }
 
 /* ------------------------------------------- Unity inspector density ------ */
@@ -8847,8 +8786,7 @@ input[type=range] {
 	display: none;
 }
 
-.editor-toolbar.scene-tools > button,
-.editor-toolbar.play-tools > button {
+.editor-toolbar.scene-tools > button {
 	flex: none;
 	height: 26px;
 	padding: 0 6px;
@@ -8862,90 +8800,39 @@ input[type=range] {
 	white-space: nowrap;
 }
 
-.editor-toolbar.scene-tools > button:hover,
-.editor-toolbar.play-tools > button:hover {
+.editor-toolbar.scene-tools > button:hover {
 	background: #363636;
 	color: #fff;
 }
 
-.editor-toolbar.play-tools > button:disabled {
-	opacity: .38;
-	cursor: default;
-}
-
-.editor-toolbar.play-tools {
-	position: static;
-	flex: 1;
-	min-width: 0;
-	height: 27px;
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 0;
-	background: var(--panel);
-}
-
-.viewport-readout {
-	flex: none;
-	height: 26px;
-	display: inline-flex;
-	align-items: center;
-	padding: 0 8px;
-	border-right: 1px solid var(--line);
-	color: #b7b7b7;
-	font-size: 9px;
-	white-space: nowrap;
-}
-
-.editor-toolbar.play-tools > button.recording {
-	color: #ff8d86;
-}
-
-/* Reference exports menu in the PlayView bar (#165). It reuses the project
-   menu's popover, so the studio has one dropdown language; only the trigger
-   takes the toolbar's own flat button treatment. The 27px title bar clips its
-   own overflow, so the panel is fixed to the viewport and anchored to the
-   trigger in JS — it hangs from the right because this bar is right-aligned. */
+/* The studio's one Export menu (#165, moved to the topbar in #193). It reuses
+   the project menu's popover so the studio has a single dropdown language;
+   the trigger is a plain .topbar-action. The panel stays fixed to the viewport
+   and anchored to the trigger in JS, hanging from the right because the topbar
+   actions are right-aligned. */
 .export-menu-wrap {
 	position: relative;
 	flex: none;
-	align-self: stretch;
 	display: flex;
 	align-items: center;
 }
 
-.export-menu-trigger {
-	flex: none;
-	height: 26px;
+.export-menu-wrap .topbar-action {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	padding: 0 6px;
-	border: 0;
-	border-right: 1px solid var(--line);
-	background: transparent;
-	color: #bdbdbd;
-	font: inherit;
-	font-size: 9px;
-	cursor: pointer;
+	gap: 6px;
 	white-space: nowrap;
 }
 
-.export-menu-trigger:hover,
-.export-menu-trigger[aria-expanded="true"] {
-	background: #363636;
-	color: #fff;
-}
-
-.export-menu-trigger .caret {
+.export-menu-wrap .topbar-action .caret {
 	color: var(--muted2);
-	font-size: 8px;
+	font-size: 10px;
 }
 
 .export-menu {
 	position: fixed;
 	left: auto;
-	min-width: 220px;
+	min-width: 240px;
 	z-index: 80;
 }
 
@@ -8954,6 +8841,13 @@ input[type=range] {
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 12px;
+}
+
+/* The keyframe pack is the delivery this studio exists to make, so it leads
+   the menu and wears the accent instead of reading as one option of five. */
+.export-menu button.export-menu-primary {
+	font-weight: 700;
+	color: var(--cyan);
 }
 
 .export-menu button:disabled {
@@ -8966,6 +8860,174 @@ input[type=range] {
 	color: var(--muted2);
 	font-size: 10px;
 }
+
+/* R3: an export whose precondition is missing is not rendered as a dead row —
+   this line says what to author to get it back. */
+.export-menu-hint {
+	margin: 4px 2px 0;
+	padding: 7px 10px 3px;
+	border-top: 1px solid var(--line);
+	color: var(--muted2);
+	font-size: 10px;
+	line-height: 1.4;
+}
+
+/* Settings menu (#193): app preferences — language, analytics — under one
+   labelled topbar trigger. Same popover as the project menu, anchored to its
+   own wrap because the topbar does not clip its overflow. */
+.settings-menu-wrap {
+	position: relative;
+	flex: none;
+	display: flex;
+	align-items: center;
+}
+
+/* View ▾ (#194): the viewport bar's own menu of look toggles. It borrows the
+   export menu's trigger and the project menu's popover so the studio keeps one
+   dropdown language; the wrap's auto margin parks it at the bar's right end in
+   every mode, and the dot says a toggle is on without opening the menu. */
+.view-menu-wrap {
+	position: relative;
+	flex: none;
+	margin-left: auto;
+	align-self: stretch;
+	display: flex;
+	align-items: center;
+}
+
+/* The live-workspace handle can fill the row; a settings label that wrapped to
+   one glyph per line is how the topbar used to squeeze the language button. */
+.settings-menu-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+}
+
+.settings-menu-trigger .caret {
+	color: var(--muted2);
+	font-size: 10px;
+}
+
+.settings-menu {
+	top: calc(100% + 6px);
+	left: auto;
+	right: 0;
+	min-width: 210px;
+	z-index: 80;
+}
+
+.settings-menu h4 {
+	margin: 6px 10px 2px;
+	color: var(--muted2);
+	font-size: 10px;
+	font-weight: 650;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+}
+
+.settings-menu button {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.settings-menu button .mark {
+	color: var(--muted2);
+	font-size: 10px;
+}
+
+.settings-menu button[aria-pressed="true"] .mark {
+	color: var(--cyan);
+}
+
+.view-menu-trigger {
+	position: relative;
+	flex: none;
+	height: 26px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 8px;
+	border: 0;
+	border-left: 1px solid var(--line);
+	background: transparent;
+	color: #bdbdbd;
+	font: inherit;
+	font-size: 9px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.view-menu-trigger:hover,
+.view-menu-trigger[aria-expanded="true"] {
+	background: #363636;
+	color: #fff;
+}
+
+.view-menu-trigger .caret {
+	color: var(--muted2);
+	font-size: 8px;
+}
+
+.view-menu-dot {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--accent);
+	flex: none;
+}
+
+.view-menu {
+	position: fixed;
+	left: auto;
+	min-width: 200px;
+	z-index: 80;
+}
+
+.view-menu .view-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.view-menu .view-menu-item.active {
+	background: var(--accent-soft);
+}
+
+.view-menu-mark {
+	width: 12px;
+	flex: none;
+	color: var(--accent);
+	font-size: 11px;
+	text-align: center;
+}
+
+.view-menu-group {
+	display: flex;
+	flex-direction: column;
+	margin-top: 4px;
+	padding-top: 4px;
+	border-top: 1px solid var(--line);
+}
+
+.view-menu-label {
+	padding: 4px 10px;
+	color: var(--muted);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+}
+
+/* Placement (Motion mode) drops the Y axis: the row is two fields wide, not a
+   truncated XYZ, and the second field is Z — Unity's blue, not the Y green. */
+.placement-fields .vec3-row {
+	grid-template-columns: 56px 1fr 1fr;
+}
+
+.placement-fields .vec3-row .number-field:nth-of-type(2) .axis { color: #79c0ff; }
 
 /* ----------------------------------------------------- Unity axis colors --- */
 /* X red / Y green / Z blue — Unity's axis colour-coding (class-Transform). */
@@ -10318,9 +10380,6 @@ input[type=range] {
 		border: 1px solid var(--line2);
 		border-radius: 3px;
 	}
-	.editor-toolbar.scene-tools > .grid-view-switch {
-		margin-left: 4px;
-	}
 	.editor-toolbar.scene-tools .viewport-toolbar-field,
 	.editor-toolbar.scene-tools .viewport-fov-control {
 		background: rgba(0, 0, 0, .08);
@@ -10363,19 +10422,6 @@ input[type=range] {
 	}
 }
 
-/* Language control: short, stable geometry prevents the Korean label from
-   stretching the top bar while still leaving a comfortable click target. */
-.locale-toggle {
-		min-width: 34px;
-		height: 26px;
-		padding: 0 8px;
-		font-size: 10px;
-		font-weight: 600;
-		line-height: 1;
-		letter-spacing: -.02em;
-		white-space: nowrap;
-}
-
 /* Korean copy should not create oversized rows or split words mid-syllable.
    These selectors cover labels and controls without changing the model-facing
    prompt contract or the English-default typography. */
@@ -10387,7 +10433,7 @@ input[type=range] {
 .foldout-head,
 .right-panel-tabs,
 .bottom-window-tabs,
-.locale-toggle {
+.settings-menu {
 	word-break: keep-all;
 	overflow-wrap: anywhere;
 }
@@ -10507,4 +10553,143 @@ input[type=range] {
 .reference-slot-error {
 	margin: 0;
 	color: #e08a7a;
+}
+
+/* ------------------------------------------------- camera tutorial ------- */
+
+/* The Studio-native camera tutorial (#206): a strip of seven step chips and
+   one hint card, hung under the 27px viewport titlebar, left of the Top-View
+   inset (right:15px). The overlay is transparent to the pointer — every step
+   is finished by working the stage underneath it — so only the close button
+   takes clicks. */
+.camera-tutorial {
+	position: absolute;
+	top: 35px;
+	left: 12px;
+	z-index: 7;
+	width: min(430px, calc(100% - 24px - 26%));
+	padding: 8px 10px 9px;
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	background: color-mix(in srgb, var(--panel) 94%, #000);
+	border: 1px solid var(--line2);
+	border-radius: 8px;
+	box-shadow: var(--shadow-md);
+	pointer-events: none;
+	animation: rise var(--med) var(--ease) both;
+}
+
+/* The look-through exit pill is centred in the same band (top:60px), and it
+   is the only way back to the free camera without the keyboard. While the
+   player is up the card gives that width back rather than covering it. */
+.camera-tutorial[data-previewing="1"] {
+	width: clamp(220px, calc(50% - 92px), 360px);
+}
+
+.camera-tutorial-steps {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin: 0;
+	padding: 0 22px 0 0;
+	list-style: none;
+}
+
+.camera-tutorial-steps li {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 7px;
+	border: 1px solid var(--line2);
+	border-radius: 999px;
+	color: var(--muted);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: .02em;
+}
+
+.camera-tutorial-steps li i {
+	font-family: var(--mono);
+	font-style: normal;
+	font-size: 9px;
+	opacity: .85;
+}
+
+.camera-tutorial-steps li[data-current="1"] {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	color: var(--fg);
+}
+
+.camera-tutorial-steps li[data-done="1"] {
+	border-color: color-mix(in srgb, #65c18c 55%, transparent);
+	color: #65c18c;
+}
+
+.camera-tutorial-card {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	color: var(--fg);
+	font-size: 11.5px;
+	line-height: 1.45;
+}
+
+.camera-tutorial-card p {
+	margin: 0;
+}
+
+.camera-tutorial-count {
+	flex: none;
+	color: var(--accent);
+	font-family: var(--mono);
+	font-size: 9.5px;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+}
+
+.camera-tutorial-count.done {
+	color: #65c18c;
+}
+
+.camera-tutorial kbd {
+	padding: 1px 5px;
+	border: 1px solid var(--line2);
+	border-radius: 4px;
+	background: var(--card2);
+	color: var(--fg);
+	font-family: var(--mono);
+	font-size: 9.5px;
+}
+
+.camera-tutorial-keys {
+	display: inline-flex;
+	gap: 3px;
+	margin: 0 2px;
+}
+
+.camera-tutorial-keys kbd[data-done="1"] {
+	border-color: color-mix(in srgb, #65c18c 55%, transparent);
+	color: #65c18c;
+}
+
+.camera-tutorial-close {
+	position: absolute;
+	top: 4px;
+	right: 5px;
+	padding: 0 4px;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+.camera-tutorial-close:hover,
+.camera-tutorial-close:focus-visible {
+	color: var(--fg);
 }

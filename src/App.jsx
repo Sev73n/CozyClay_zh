@@ -11,9 +11,10 @@ import * as THREE from "three";
 import { buildArdyPose } from "./ardy/export.js";
 import { checkBridge, generate as ardyGenerate } from "./ardy/client.js";
 import { characterScaleFor, loadMotionFromUrl } from "./ardy/npz.js";
+import { applyMotionCalibration, normalizeMotionCalibration } from "./ardy/motion-calibration.js";
 import { motionUrlFromQuery } from "./ardy/motion-url.js";
 import { retimeMotion } from "./ardy/retime.js";
-import { applyAutoFall, applyRootDrop, autoRoofDrop, normalizeRootDrop } from "./ardy/root-drop.js";
+import { applyAutoFall, applyRootDrop, applySupportRise, autoRoofDrop, normalizeRootDrop } from "./ardy/root-drop.js";
 import {
 	createMotionEdit,
 	motionEditLayout,
@@ -34,18 +35,9 @@ import {
 	requestBridgeExtract,
 	requestBridgeFootage,
 	sourceLabel,
+	segmentationReceipt,
 	trajectoryReceipt,
 } from "./multimodel-ingest.js";
-import {
-	bakeExtractedTake,
-	bakePoseFrame,
-	collectLandmarkTrack,
-	createPoseDetector,
-	decodeImage,
-	detectMirrorAveraged,
-	sampleTimes,
-	videoFrames,
-} from "./pose-extract/index.js";
 import { applyMotionFrame, captureArdyRoot, restorePlaybackBones, snapshotPlaybackBones } from "./ardy/playback.js";
 import { PIN_BLOCKED, planPosePin } from "./ardy/pose-pin.js";
 import {
@@ -61,6 +53,7 @@ import Timeline from "./ardy/timeline.jsx";
 import { alignArdyPath, judgeAuthoredPath, judgeNextWaypoint } from "./ardy/waypoints.js";
 import { FlyControls, aimAt, forwardFrom } from "./controls.jsx";
 import { createLiveControl } from "./live-control.js";
+import AgentPanel from "./workflow/AgentPanel.jsx";
 import HierarchyPanel from "./hierarchy-panel.jsx";
 import { PlanBoard } from "./planview.jsx";
 import { autoColorHex, loadAutoColor, saveAutoColor } from "./auto-color.js";
@@ -157,6 +150,7 @@ import {
 	setSceneObjectAttach,
 	setSceneObjectParent,
 	sceneObjectIdFromHierarchy,
+	supportHeightForObject,
 	updateSceneObject,
 	writeStoredObjectColors,
 } from "./scene-objects.js";
@@ -230,11 +224,12 @@ import {
 } from "./project.js";
 import ProjectBrowser, { ProjectNameDialog } from "./project-browser.jsx";
 import FirstSuccessGuide from "./first-success-guide.jsx";
+import { CameraTutorial } from "./camera-tutorial.jsx";
 import ObjectGizmo from "./object-gizmo.jsx";
 import AssetPane from "./asset-pane.jsx";
 import AddObjectMenu from "./object-catalog.jsx";
 import ResultModal from "./result-modal.jsx";
-import AnalyticsToggle from "./analytics-toggle.jsx";
+import SettingsMenu from "./settings-menu.jsx";
 import { PWA_UPDATE_EVENT } from "./pwa.js";
 import {
 	createObjectPath,
@@ -243,9 +238,11 @@ import {
 	strokeToPathPoints,
 	MAX_PATH_POINTS,
 } from "./object-path.js";
-import LocaleToggle from "./locale-toggle.jsx";
 import { bucketCount, bucketMs, bucketProjectAge, motionBackendState, track, trackActivation, trackFeature } from "./analytics.js";
 import { ko, isKo, isZh, pick, LOCALE } from "./locale.js";
+import { fetchSceneProject, isPlaygroundEmbed, playgroundSceneUrl } from "./playground.js";
+import { STARTER_SCENES } from "./starter-scenes.js";
+
 import { PART_COLOURS } from "./part-colours.js";
 import {
 	DEFAULT_POSE,
@@ -394,7 +391,6 @@ import {
 	MCP_CAPTURE_W,
 	MIN_CURVE_POINTS,
 	MULTIMODEL_REASONS,
-	MULTIMODEL_SAMPLE_FPS,
 	MotionTrails,
 	MoveRig,
 	OBJECT_DELETE_UNDO_MS,
@@ -637,8 +633,31 @@ export async function readReferenceImage(file, { maxDimension = REFERENCE_IMAGE_
 
 export default function App() {
 	const embedMode = ["scene", "playview"].includes(new URLSearchParams(globalThis.location?.search || "").get("embed"));
+	// The landing page's try-it iframe: full studio interaction on a preset
+	// scene with the project chrome hidden and saving off (see playground.js).
+	const playgroundMode = isPlaygroundEmbed(globalThis.location?.search);
+	const [playgroundHint, setPlaygroundHint] = useState(null);
+	const playgroundExportRef = useRef(null);
+	// The camera tutorial (#206): the landing page's seven steps, run against
+	// the real studio instead of the playground iframe. It opens from
+	// /app/?tutorial=camera or from Settings ▾; opening it changes nothing else
+	// about the session, and it is not offered inside an embed.
+	const [cameraTutorial, setCameraTutorial] = useState(() => !embedMode && new URLSearchParams(globalThis.location?.search || "").get("tutorial") === "camera");
+	useEffect(() => {
+		const onTutorial = (event) => setCameraTutorial(event.detail?.open !== false);
+		window.addEventListener("cozyclay:camera-tutorial", onTutorial);
+		return () => window.removeEventListener("cozyclay:camera-tutorial", onTutorial);
+	}, []);
+	useEffect(() => {
+		if (cameraTutorial) trackFeature("camera_tutorial");
+	}, [cameraTutorial]);
 	useEffect(() => {
 		if (!embedMode) return undefined;
+		// The Workflow page's Scene node embeds the studio as its preview, so the
+		// embed enters the player through the same door the look-through button
+		// uses. The states are seeded from embedMode as well, so the first painted
+		// frame is already the shot view rather than a flash of editor chrome.
+		enterPreview();
 		const capture = () => {
 			try {
 				const live = liveStateRef.current;
@@ -686,8 +705,37 @@ export default function App() {
 	const markCraftAction = (actionKind) => {
 		if (craftActionTrackedRef.current) return;
 		craftActionTrackedRef.current = true;
-		track("craft:first_action", { action_kind: actionKind });
+		// Playground pokes are funnel data for the landing page, not for the
+		// install -> first craft funnel the studio reports.
+		track(playgroundMode ? "playground:first_action" : "craft:first_action", { action_kind: actionKind });
 	};
+	useEffect(() => {
+		if (!playgroundMode) return undefined;
+		track("playground:opened");
+		// The landing page keeps a loading veil over the iframe until the
+		// studio has actually mounted; a bare `load` fires far too early.
+		window.parent?.postMessage({ type: "cozyclay:playground-ready" }, "*");
+		// Camera gestures feed the landing page's tutorial checklist, and the
+		// checklist points back at one control (the shot look-through) by hint.
+		const onNav = (event) => window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: event.detail?.kind, key: event.detail?.key ?? null }, "*");
+		const onSignal = (event) => window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: event.detail?.kind }, "*");
+		window.addEventListener("cozyclay:playground-signal", onSignal);
+		const onHint = (event) => {
+			if (event.data?.type === "cozyclay:playground-hint") setPlaygroundHint(typeof event.data.kind === "string" ? event.data.kind : null);
+			if (event.data?.type === "cozyclay:playground-export") {
+				// The visitor keeps what they made: the landing page turns this
+				// into a .cclayproject download they can open after npx cozyclay.
+				playgroundExportRef.current?.("City Block").then(
+					(serialized) => window.parent?.postMessage({ type: "cozyclay:playground-export-result", serialized }, "*"),
+					(error) => window.parent?.postMessage({ type: "cozyclay:playground-export-result", error: String(error?.message ?? error) }, "*"),
+				);
+			}
+		};
+		window.addEventListener("cozyclay:nav", onNav);
+		window.addEventListener("message", onHint);
+		return () => { window.removeEventListener("cozyclay:nav", onNav); window.removeEventListener("cozyclay:playground-signal", onSignal); window.removeEventListener("message", onHint); };
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 	const [startup] = useState(loadSceneStartup);
 	const startupScene = startup.document.scenes[activeSceneIndex(startup.document.scenes, startup.document.activeSceneId)];
 	const startupStage = createSceneStage(startupScene.stage);
@@ -741,13 +789,21 @@ export default function App() {
 	// The Top-View is always the inset: the old double-click swap that let the
 	// plan own the big pane is gone, so there is no view mode to toggle.
 	const planIsMain = false;
-	// Unity Scene/Game tabs: PlayView is the framed output only — no editing
-	// chrome (gizmo, inset, fly navigation) reaches it.
-	const [centerTab, setCenterTab] = useState(embedMode ? "play" : "scene");
-globalThis.playMode = centerTab === "play";
-	// PlayView is the player for the finished motion: entering starts playback,
-	// leaving pauses it. Scene stays the manipulation surface.
+	// The framed output only — no editing chrome (gizmo, inset, fly navigation)
+	// reaches it. The Scene/PlayView centre tabs are gone (#195): this is an
+	// internal state with two entry points (the shot PiP's look-through button
+	// and the Workflow embed) and one exit (Esc / the exit pill).
+	const [preview, setPreview] = useState(embedMode);
+	// The name stays `playMode`: window.__cozyclay QA hooks and the MCP live
+	// bridge read this global, and the render path is still PlayView's.
+	globalThis.playMode = preview;
+	const playMode = preview;
+	// Preview is the player for the finished motion: entering starts playback,
+	// leaving pauses it. The editor view stays the manipulation surface.
 	const [tlPlaying, setTlPlaying] = useState(false);
+	useEffect(() => {
+		if (playgroundMode && tlPlaying) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "play" }, "*");
+	}, [playgroundMode, tlPlaying]);
 	const cameraPreviewEndRef = useRef(null);
 	// Once the operator touches the viewport, the physical camera stays in
 	// their hands. Follow/Rail only take it back through an explicit Preview or
@@ -761,21 +817,34 @@ globalThis.playMode = centerTab === "play";
 	// preview must show what the node captures on Run: the shot camera's view.
 	const [lookThroughShot, setLookThroughShot] = useState(embedMode);
 	useEffect(() => {
+		if (playgroundMode && lookThroughShot) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "shot" }, "*");
+	}, [playgroundMode, lookThroughShot]);
+	useEffect(() => {
 		if (!lookThroughShot || embedMode) return undefined;
 		const onKey = (event) => {
-			if (event.key === "Escape") setLookThroughShot(false);
+			if (event.key === "Escape") exitPreview();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [lookThroughShot, embedMode]);
-	useEffect(() => {
-		// The player always starts the finished piece from frame 0; auto-play
-		// only exists once there is a motion to play.
-		if (centerTab === "play") setTlFrame(0);
-		if (centerTab === "play" && motion) setTlPlaying(true);
-		if (centerTab === "scene") setTlPlaying(false);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [centerTab]);
+	}, [lookThroughShot, embedMode]);
+	/** The one way in. The shot camera takes the whole pane (DualRender's
+	 * playMode branch), the piece restarts from frame 0, and auto-play only
+	 * exists once there is a motion to play. Look-through rides along so every
+	 * site that picks a camera keeps pointing at the shot camera. */
+	function enterPreview() {
+		setPreview(true);
+		setLookThroughShot(true);
+		setTlFrame(0);
+		if (motion) setTlPlaying(true);
+	}
+	/** ...and the one way out: editing chrome back, playback paused, so leaving
+	 * the player never leaves the timeline running underneath it. */
+	function exitPreview() {
+		setPreview(false);
+		setLookThroughShot(false);
+		setTlPlaying(false);
+	}
 	const stageRef = useRef();
 	const mainPaneRef = useRef();
 	const insetPaneRef = useRef();
@@ -795,6 +864,10 @@ globalThis.playMode = centerTab === "play";
 	const planHostRef = planIsMain ? mainPaneRef : insetPaneRef;
 
 	useEffect(() => {
+		// The landing-page playground runs a fixed, throwaway layout: whatever a
+		// visitor drags in the iframe must never overwrite the layout they use in
+		// the real studio (same origin, same key).
+		if (playgroundMode) return;
 		// Quota-guarded like persistScenes: a full disk used to throw out of
 		// this effect and blank the studio mid-resize (issue #63).
 		try {
@@ -802,7 +875,7 @@ globalThis.playMode = centerTab === "play";
 		} catch (err) {
 			console.warn("[cozyclay] workspace layout not saved:", err?.name ?? err);
 		}
-	}, [workspaceLayout]);
+	}, [playgroundMode, workspaceLayout]);
 
 	// Wheel over the inset zooms the Top-View plan: scroll up closes in on
 	// the pucks (camera lower), scroll down widens out (camera higher) — the
@@ -1172,16 +1245,17 @@ globalThis.playMode = centerTab === "play";
 	// Keep the underlying selection model intact, but use this small workflow
 	// state to surface only the tools that belong to the current job.
 	const [workflowMode, setWorkflowMode] = useState("scene");
-	// The Studio is an authoring tool, so its full editing surface is always
-	// available. Workflow is the first screen; there is no beginner gate to
-	// hide the controls that make a scene editable.
-	const advancedMode = true;
 	function selectWorkflowMode(next) {
 		setWorkflowMode(next);
-		setCenterTab("scene");
+		// Picking a department is an editing act: it always lands in the editor
+		// view, never inside the player.
+		exitPreview();
 		if (next === "camera") setSelectedHierarchyId("camera");
 		else if (next === "motion") {
-			setSelectedHierarchyId("characters");
+			// The active character's ROW, not the group: the placement gizmo only
+			// renders for a specific cast member, so selecting the group used to
+			// drop the operator into Motion with nothing to drag.
+			setSelectedHierarchyId(rowIdForCharIndex(activeCharIndex));
 			// Selecting Motion should land on its first useful control rather than
 			// leaving the operator to hunt through a long inspector column.
 			setPromptBlocksReveal((signal) => signal + 1);
@@ -1365,6 +1439,12 @@ globalThis.playMode = centerTab === "play";
 		// render-captured store can still settle the scene that was left.
 		storeRef.current.settle();
 		setSelectedHierarchyId(id);
+		// Selecting the camera IS the request to frame a shot (#193). The camera
+		// bar owns FOV/Recenter/presets and is CSS-gated to Camera mode, so a
+		// camera picked from Scene mode would otherwise select a subject whose
+		// controls are all hidden. selectWorkflowMode re-selects the camera
+		// itself, so this cannot bounce back here.
+		if (id === "camera" && workflowMode !== "camera") selectWorkflowMode("camera");
 		// Moving the focus anywhere but the camera releases the crane dot too:
 		// a press on the floor or the sky must not leave a mark selected.
 		if (id !== "camera") setCraneSelectedIndex(null);
@@ -2069,6 +2149,10 @@ globalThis.playMode = centerTab === "play";
 	// active strip; there is no shared key list that could blend through a cut.
 	const [shots, setShots] = useState(() => startupShotState?.shots ?? initialShots(startupShotState?.frameCount ?? DEFAULT_DURATION_S * TIMELINE_FPS));
 	const [movePlaying, setMovePlaying] = useState(false);
+	useEffect(() => {
+		if (playgroundMode && movePlaying) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "play" }, "*");
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [playgroundMode, movePlaying]);
 	// Follow slaves the move to the timeline playhead so camera and character
 	// motion share one time axis; off frees the camera while both stay set.
 	const [moveFollow, setMoveFollow] = useState(true);
@@ -2664,6 +2748,7 @@ globalThis.playMode = centerTab === "play";
 		if (kind === "prompt-text") recordSessionUndo(promptTextSessionRef, `prompt-text:${id}`);
 	}
 	function changeCameraRail(points) {
+		if (Array.isArray(points) && points.length >= 2) window.dispatchEvent(new CustomEvent("cozyclay:playground-signal", { detail: { kind: "rail" } }));
 		changeActiveCamera({
 			cameraRail: points,
 			railFollow: points ? railFollowForNewGeometry(activeCamera.railFollow, activeShotDuration) : null,
@@ -2981,7 +3066,7 @@ globalThis.playMode = centerTab === "play";
 	// A first-run author should choose a document (or explicitly start a named
 	// local draft). Keep this as a light startup sheet so the studio remains
 	// inspectable while the choice is pending; it never traps the topbar.
-	const [projectStartupOpen, setProjectStartupOpen] = useState(() => !loadProjectSession()?.name);
+	const [projectStartupOpen, setProjectStartupOpen] = useState(() => !playgroundMode && !playgroundSceneUrl(globalThis.location?.search) && !loadProjectSession()?.name);
 
 	// Dismissal mirrors the inspector-actions menu: only listen while open,
 	// ignore presses inside the wrap (the trigger's own click keeps toggling),
@@ -3021,6 +3106,36 @@ globalThis.playMode = centerTab === "play";
 			window.removeEventListener("keydown", onKeyDown);
 		};
 	}, [exportMenuOpen]);
+	// `View ▾` on the viewport bar (#194): one home for the display-only
+	// toggles that used to be scattered across the topbar, the scene bar and
+	// the inspector. Same dismissal as the two menus above, plus focus
+	// returning to the trigger on Escape — the bar is a keyboard stop.
+	const [viewMenuOpen, setViewMenuOpen] = useState(false);
+	const [viewMenuAnchor, setViewMenuAnchor] = useState({ top: 0, right: 0 });
+	const viewMenuTriggerRef = useRef(null);
+	useEffect(() => {
+		if (!viewMenuOpen) return undefined;
+		const onPointerDown = (event) => {
+			if (event.target instanceof Element && event.target.closest(".view-menu-wrap")) return;
+			setViewMenuOpen(false);
+		};
+		const onKeyDown = (event) => {
+			if (event.key !== "Escape") return;
+			setViewMenuOpen(false);
+			viewMenuTriggerRef.current?.focus();
+		};
+		document.addEventListener("pointerdown", onPointerDown);
+		window.addEventListener("keydown", onKeyDown);
+		return () => {
+			document.removeEventListener("pointerdown", onPointerDown);
+			window.removeEventListener("keydown", onKeyDown);
+		};
+	}, [viewMenuOpen]);
+	// The agent panel keeps owning its own collapsed flag (the rail button and
+	// Cmd/Ctrl+B both live inside it); the studio only mirrors the flag so the
+	// View ▾ item can render a checkmark. It boots collapsed here: the studio
+	// opens on the stage, not on a chat column.
+	const [agentCollapsed, setAgentCollapsed] = useState(true);
 	const projectHandleRef = useRef(null);
 	const projectSnapshotRef = useRef("");
 	const projectStateRef = useRef(null);
@@ -3057,6 +3172,7 @@ globalThis.playMode = centerTab === "play";
 		return JSON.stringify(createProjectDocument(projectDocumentInput(name)));
 	}
 
+	playgroundExportRef.current = collectProjectSerialized;
 	async function collectProjectSerialized(name) {
 		const input = projectDocumentInput(name);
 		const db = await openAssetDb();
@@ -3173,6 +3289,31 @@ globalThis.playMode = centerTab === "play";
 		setProjectStartupOpen(false);
 		track("project:opened", { age_bucket: bucketProjectAge(Date.now() - (project.savedAt ?? Date.now())) });
 	}
+
+	/** Open a bundled starter scene as a fresh, saveable project. Used by the
+	 * first-run dialog and by `npx cozyclay --scene <id>` (`?scene=`), which is
+	 * how the landing-page tutorial hands people into the local studio. */
+	async function openStarterScene(id, source = "starter") {
+		const url = playgroundSceneUrl(`?scene=${encodeURIComponent(id)}`);
+		const project = url ? await fetchSceneProject(url) : null;
+		if (!project) {
+			setToast(ko("That starter scene is not in this build", "이 빌드에는 그 시작 장면이 없어요", "此构建里没有那个起始场景"));
+			return false;
+		}
+		applyProject({ ...project, savedAt: null });
+		projectHandleRef.current = null;
+		track("scene:loaded", { scene_source: source });
+		return true;
+	}
+	const starterOpened = useRef(false);
+	useEffect(() => {
+		if (starterOpened.current || playgroundMode) return;
+		const requested = new URLSearchParams(globalThis.location?.search || "").get("scene");
+		if (!requested) return;
+		starterOpened.current = true;
+		void openStarterScene(requested, "launch");
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	async function openProject() {
 		try {
@@ -3508,6 +3649,7 @@ globalThis.playMode = centerTab === "play";
 		buildShotKeyframePack,
 		shotIndexForPack,
 		renderPassDataUrls,
+		exportShotVideo,
 		shots,
 	};
 	if (!liveHandlersRef.current) {
@@ -4168,13 +4310,7 @@ globalThis.playMode = centerTab === "play";
 	const [multiModelExtract, setMultiModelExtract] = useState("idle"); // idle | running | done | error
 	const [multiModelExtractProgress, setMultiModelExtractProgress] = useState(null);
 	const [multiModelExtractError, setMultiModelExtractError] = useState("");
-	const multiModelDetectorRef = useRef(null); // engine survives re-runs; the 15 MB download happens once
-	const multiModelRestRef = useRef(null);
-	// A still needs its own landmarker: MediaPipe fixes the running mode at
-	// creation and refuses detect() on a VIDEO-mode instance. The weights are
-	// already cached by then, so the second instance is cheap.
 	const photoPoseFileRef = useRef(null);
-	const photoPoseDetectorRef = useRef(null);
 	const [photoPoseState, setPhotoPoseState] = useState("idle");
 	const [photoPoseError, setPhotoPoseError] = useState("");
 
@@ -4405,6 +4541,11 @@ globalThis.playMode = centerTab === "play";
 	const recRef = useRef(null);
 	const tlFrameRef = useRef(0);
 	tlFrameRef.current = tlFrame;
+	// The cut an export samples. A preflight that materializes a framing key
+	// (see exportShotVideo) commits it through setShots, but this render's
+	// applyExportFrame closure still holds the pre-commit list — the export runs
+	// before React re-renders. The ref carries the list the export must read.
+	const exportShotsRef = useRef(null);
 
 	function applyExportFrame(frame) {
 		// Props on a travel path read this ref inside their own useFrame, so a
@@ -4422,7 +4563,7 @@ globalThis.playMode = centerTab === "play";
 		// its place on them. gl.render() never runs the r3f frame loop, so this
 		// pass is the recorder's stand-in for the useFrame the preview gets.
 		propSyncRef.current?.();
-		const sampled = sampleAt(playbackScene, shotAtFrame(shots, frame), frame);
+		const sampled = sampleAt(playbackScene, shotAtFrame(exportShotsRef.current ?? shots, frame), frame);
 		const cam = shotCamRef.current;
 		if (cam && sampled.camera) {
 			cam.position.set(sampled.camera.pos.x, sampled.camera.pos.y, sampled.camera.pos.z);
@@ -4509,16 +4650,48 @@ globalThis.playMode = centerTab === "play";
 		recRef.current?.controller.abort();
 	}
 
-	function toggleShotRecording() {
+	/** Export the shot under the playhead (else the first one) as an MP4, or
+	 *  stop the export that is already running.
+	 *
+	 *  Two preflights (#193) stand between the menu item and runShotExport:
+	 *  a shot with no camera keys has nothing for cameraMoveAt to interpolate,
+	 *  so the recording would capture wherever the physical shot camera happens
+	 *  to sit — one framing key from the current camera, the same default
+	 *  addShotAtFrame writes, makes the static shot exportable. And without
+	 *  motion the timeline extent ignores shots and falls back to the whole
+	 *  production duration, so a 40-frame static shot must record its own
+	 *  [startFrame, endFrame] range instead of 360 frames of held pose. */
+	function exportShotVideo({ download = true } = {}) {
 		if (recRef.current) {
 			stopShotRecording();
-			return;
+			return null;
 		}
-		runShotExport().then(() => {
+		const atPlayhead = shotIndexAtFrame(shots, tlFrame);
+		const target = shots[atPlayhead >= 0 ? atPlayhead : 0] ?? null;
+		let exportShots = shots;
+		if (target && target.cameraKeys.length === 0) {
+			const framing = captureCurrentFraming();
+			exportShots = updateStableItem(
+				shots,
+				target.id,
+				(shot) => ({ ...shot, cameraKeys: [{ id: createStableItemId("camera-key"), frame: shot.startFrame, framing }] }),
+				"shots",
+			);
+			recordShotUndo();
+			setShots(exportShots);
+			setToast(ko("Framing keyed at the shot's first frame", "샷 첫 프레임에 현재 프레이밍을 저장했습니다", "已在镜头第一帧记下当前构图"));
+		}
+		exportShotsRef.current = exportShots;
+		const range = target && !motion ? { startFrame: target.startFrame, endFrame: target.endFrame } : {};
+		return runShotExport({ ...range, download }).then((result) => {
 			track("export:video_succeeded", { format: "mp4" });
 			trackFeature("export_video");
+			return result;
 		}).catch((error) => {
 			if (error?.name !== "AbortError") setToast(error?.message || String(error));
+			return null;
+		}).finally(() => {
+			exportShotsRef.current = null;
 		});
 	}
 
@@ -4885,6 +5058,7 @@ globalThis.playMode = centerTab === "play";
 		recordShotUndo();
 		setShots(next);
 		trackFeature("shot_add");
+		window.dispatchEvent(new CustomEvent("cozyclay:playground-signal", { detail: { kind: "shot" } }));
 	}
 
 	function splitTimelineShot(shotId) {
@@ -4905,6 +5079,7 @@ globalThis.playMode = centerTab === "play";
 		manualCameraOverrideRef.current = false;
 		setTlFrame(selected.startFrame);
 		setSelectedHierarchyId("camera");
+		if (workflowMode !== "camera") selectWorkflowMode("camera");
 	}
 
 	function duplicateTimelineShot(shotId) {
@@ -4954,6 +5129,11 @@ globalThis.playMode = centerTab === "play";
 		|| selectedHierarchyId === "characterA"
 		|| selectedHierarchyId === "characterB"
 		|| selectedHierarchyId.startsWith("character:");
+	// The View menu's three toggles, as the menu reads them: one radio choice
+	// for the part colours, and a dot on the trigger whenever the viewport is
+	// showing something other than the plain stage.
+	const partColoursChoice = partColoursEnabled ? partColoursMode : "off";
+	const viewLooksActive = gridView || autoColor || partColoursEnabled;
 	const rigSelection = parseRigNodeId(selectedHierarchyId);
 	const isRigSelection = rigSelection !== null;
 	const inspectorHasContent = isSceneSelection || isCameraSelection || isCharacterSelection || isRigSelection
@@ -5293,12 +5473,21 @@ globalThis.playMode = centerTab === "play";
 	}
 
 	/** Extract motion from the ingested footage. With the bridge up this goes
-	 *  to the GPU box (SAM-3D-Body: whole-clip temporal context, real 3D body
-	 *  prior — previs-grade). Without it, the browser MediaPipe path below
-	 *  still works offline as the rough-blocking fallback. */
+	 *  to the GPU box (GVHMR: whole-clip temporal context, real 3D body
+	 *  prior — previs-grade). If the bridge is unavailable or is configured for
+	 *  another backend, extraction stops with a named error. */
 	async function extractMultiModelMotion() {
-		if (bridge?.ok) return extractMultiModelMotionGpu();
-		return extractMultiModelMotionBrowser();
+		if (!bridge?.ok) {
+			setMultiModelExtract("error");
+			setMultiModelExtractError(pick(MULTIMODEL_REASONS["extract-bridge-required"]) ?? "extract-bridge-required");
+			return;
+		}
+		if (bridge.extractionBackend !== "gvhmr") {
+			setMultiModelExtract("error");
+			setMultiModelExtractError(pick(MULTIMODEL_REASONS["extract-backend-unsupported"]) ?? "extract-backend-unsupported");
+			return;
+		}
+		return extractMultiModelMotionGpu();
 	}
 
 	async function extractMultiModelMotionGpu() {
@@ -5320,6 +5509,16 @@ globalThis.playMode = centerTab === "play";
 				}
 			);
 			if (!live()) return;
+			if (done.quality && done.quality.pass === false) {
+				const failed = Array.isArray(done.quality.checks)
+					? done.quality.checks.filter((check) => check && check.pass === false).map((check) => check.name).join(", ")
+					: "quality";
+				setToast(ko(
+					`Mocap quality warning: ${failed || "validation failed"} — loaded for review, correction required`,
+					`모캡 품질 경고: ${failed || "검증 실패"} — 결과는 로드하지만 보정이 필요합니다`,
+					`动捕质量警告：${failed || "校验失败"} — 已加载供检查，需要修正`,
+				));
+			}
 			// One take per tracked performer. An older bridge sends a single
 			// motionUrl and no list; that is the same thing with one entry.
 			const takes = Array.isArray(done.takes) && done.takes.length
@@ -5364,7 +5563,7 @@ globalThis.playMode = centerTab === "play";
 			const placed = await deliverExtraTakes(takes.slice(1), active, label);
 			if (!live()) return;
 			const persons = 1 + placed;
-			setMultiModelTake({ frames: done.frames, fps: done.fps, gpu: true, personScale, persons, trajectory: done.performance?.trajectory });
+			setMultiModelTake({ frames: done.frames, fps: done.fps, gpu: true, personScale, persons, trajectory: done.performance?.trajectory, segmentation: done.segmentation ?? done.performance?.segmentation ?? takes[0]?.segmentation ?? null, quality: done.quality ?? takes[0]?.quality ?? null });
 			setMultiModelExtract("done");
 			setToast(ko(
 				`GPU motion extracted — ${done.frames} frames @ ${done.fps} fps${persons > 1 ? ` · ${persons} performers` : ""} · person scale ×${personScale.toFixed(2)}`,
@@ -5383,14 +5582,40 @@ globalThis.playMode = centerTab === "play";
 	 *  layer: it goes to that entry's sessionMotion, NOT through the editing
 	 *  buffer, which holds the active character's clip alone. Returns how many
 	 *  performers actually landed. */
+	const authoredSupportDescriptors = () => sceneObjects.map((object) => ({
+		x: object.x,
+		z: object.z,
+		rotDeg: object.rot ?? 0,
+		supportY: (object.y ?? 0) + supportHeightForObject(object) * (object.scaleY ?? 1),
+		topY: (object.y ?? 0) + supportHeightForObject(object) * (object.scaleY ?? 1),
+		width: (object.footprint?.width ?? 0) * (object.scaleX ?? 1),
+		depth: (object.footprint?.depth ?? 0) * (object.scaleZ ?? 1),
+	}));
+	const applyAuthoredSupportRise = (clip, anchor, rotationDeg, worldScale = characterScaleFor(clip)) => applySupportRise(clip, authoredSupportDescriptors(), {
+		subjectX: anchor.x,
+		subjectY: anchor.y ?? 0,
+		subjectZ: anchor.z,
+		rotationDeg,
+		worldScale,
+	});
+
 	async function deliverExtraTakes(extras, active, label) {
 		const decoded = await Promise.all(extras.map(async (take, index) => {
 			if (typeof take?.motionUrl !== "string" || !take.motionUrl) return null;
 			try {
 				// Inbound boundary, exactly like every other clip: decode, then
 				// retime onto the production clock before anything counts frames.
-				const clip = retimeMotion(await loadMotionFromUrl(take.motionUrl), TIMELINE_FPS);
 				const anchor = takeAnchor(active, take.offsetX, take.offsetZ);
+				const clip = retimeMotion(await loadMotionFromUrl(take.motionUrl), TIMELINE_FPS);
+				const scale = characterScaleFor(clip, take.personScale);
+				const raised = applyAuthoredSupportRise(clip, { ...anchor, y: active.y ?? 0 }, active.rot, scale);
+				const staging = autoRoofDrop(
+					raised,
+					{ x: anchor.x, z: anchor.z, y: active.y ?? 0, rotationDeg: active.rot },
+					authoredSupportDescriptors(),
+					{ worldScale: scale },
+				);
+				const stagedClip = staging ? applyAutoFall(raised, staging, { worldScale: scale }) : raised;
 				return {
 					url: take.motionUrl,
 					prompt: `${label} · ${index + 2}`,
@@ -5400,7 +5625,7 @@ globalThis.playMode = centerTab === "play";
 					// their own stature, and the response estimate is only the
 					// fallback for an npz that stores none.
 					scale: characterScaleFor(clip, take.personScale),
-					clip,
+					clip: stagedClip,
 				};
 			} catch {
 				return null; // one unreadable take never voids the others
@@ -5464,88 +5689,7 @@ globalThis.playMode = centerTab === "play";
 		return assignments.length;
 	}
 
-	async function extractMultiModelMotionBrowser() {
-		const footage = multiModelFootage;
-		if (!footage || multiModelExtract === "running") return;
-		const run = multiModelRunRef.current;
-		const live = () => multiModelRunRef.current === run;
-		setMultiModelExtract("running");
-		setMultiModelExtractProgress(null); // indeterminate while the engine spins up
-		setMultiModelExtractError("");
-		setMultiModelTake(null);
-		try {
-			if (!multiModelRestRef.current) {
-				const response = await fetch("/ardy/cskel27-rest.json").catch(() => null);
-				if (!response?.ok) throw new Error("rest-unavailable");
-				multiModelRestRef.current = await response.json().catch(() => {
-					throw new Error("rest-unavailable");
-				});
-			}
-			if (!multiModelDetectorRef.current) {
-				multiModelDetectorRef.current = await createPoseDetector();
-			}
-			const detector = multiModelDetectorRef.current;
-			const total = sampleTimes(footage.durationS, MULTIMODEL_SAMPLE_FPS).length;
-			const samples = await collectLandmarkTrack({
-				frames: videoFrames(footage.objectUrl, {
-					createVideo: () => document.createElement("video"),
-					sampleFps: MULTIMODEL_SAMPLE_FPS,
-				}),
-				detect: detector.detect,
-				onProgress: ({ processed }) => {
-					if (live()) setMultiModelExtractProgress(total > 0 ? processed / total : null);
-				},
-			});
-			if (!live()) return;
-			if (samples.length === 0) throw new Error("no-person-found");
-			const take = bakeExtractedTake({
-				samples,
-				rest: multiModelRestRef.current,
-				fps: MULTIMODEL_SAMPLE_FPS,
-				durationS: footage.durationS,
-				createdMs: Date.now(),
-			});
-			if (!live()) return;
-			const rig = activeRig;
-			if (!rig) throw new Error("rig-not-loaded");
-			beginPlaybackOn(rig);
-			const loaded = {
-				prompt: multiModelSource?.name ?? sourceLabel(footage.objectUrl),
-				frames: take.frames,
-				fps: take.fps,
-				rotMats: take.rotMats,
-				rootPos: take.rootPos,
-				posedJoints: take.posedJoints,
-				anchorX: activeChar.x,
-				anchorZ: activeChar.z,
-				anchorFrame: 0,
-				rotationDeg: activeChar.rot,
-				editSegments: createMotionEdit(take.frames),
-			};
-			// A baked take is trimmable like any other: without this the strip's
-			// handles would drag against an empty map and cut nothing at all.
-			motionFullRef.current.set(activeChar.id, loaded);
-			// The browser fallback estimates no stature, and its root travel is
-			// in canonical units — so it must not inherit the scale a previous
-			// GPU take left on the character.
-			setCharacters((list) => list.map((entry) => entry.id === activeChar.id
-				? { ...entry, scale: characterScaleFor(take) }
-				: entry));
-			setMotion(loaded);
-			setTlFrameCount(take.frames);
-			setTlFps(take.fps);
-			setTlFrame(0);
-			setTlPlaying(false);
-			setMultiModelTake({ frames: take.frames, fitted: take.fitted, held: take.held, sampled: total, accepted: samples.length });
-			setMultiModelExtract("done");
-			setToast(ko(`Motion extracted — a ${take.frames}-frame take @ ${take.fps} fps (${take.fitted} measured, ${take.held} held)`, `모션 추출됨 — ${take.frames}프레임 테이크 @ ${take.fps} fps (실측 ${take.fitted}, 유지 ${take.held})`, `动作已提取 — ${take.frames} 帧镜头 @ ${take.fps} fps（实测 ${take.fitted}，保持 ${take.held}）`));
-		} catch (error) {
-			if (!live()) return;
-			const code = error?.message ?? String(error);
-			setMultiModelExtract("error");
-			setMultiModelExtractError(pick(MULTIMODEL_REASONS[code]) ?? code);
-		}
-	}
+
 
 	useEffect(() => () => {
 		if (multiModelObjectUrlRef.current) URL.revokeObjectURL(multiModelObjectUrlRef.current);
@@ -5567,7 +5711,7 @@ globalThis.playMode = centerTab === "play";
 		// load toast, the auto-drop toast, clearing the IK keys, snapping the
 		// playhead back to 0 — is an announcement about a take CHANGING. A
 		// preview is the same take seen a second time, so it makes none of them.
-		{ preview = false } = {},
+		{ preview = false, calibration = null } = {},
 	) {
 		setMotionBusy(true);
 		setMotionError("");
@@ -5577,26 +5721,48 @@ globalThis.playMode = centerTab === "play";
 			// the timeline counts its frames. Same-rate input rides through.
 			// A drop is staging applied to the clip itself, so it happens at
 			// the same boundary — trims and IK then see the dropped take.
-			const raw = retimeMotion(await loadMotionFromUrl(url), TIMELINE_FPS);
+			const retimed = retimeMotion(await loadMotionFromUrl(url), TIMELINE_FPS);
+			const normalizedCalibration = normalizeMotionCalibration(calibration);
+			// Scene yaw/XY translation belong to the character's scene transform.
+			// Applying them to both the arrays and the Character group would rotate
+			// the trajectory twice and leave rotMats facing the old direction.
+			const playbackCalibration = { ...normalizedCalibration, yawDeg: 0, offsetX: 0, offsetZ: 0 };
+			// Scene calibration is optional metadata from the capture boundary. It
+			// runs before support/fall staging so every downstream measurement uses
+			// the same scene-space coordinates.
+			const raw = applyMotionCalibration(retimed, playbackCalibration).motion;
+			// Staging descriptors are authored in scene metres while decoded
+			// trajectories are canonical-body units. Resolve stature before any
+			// support or fall math so a 0.8x/1.2x performer still lands exactly on
+			// the same authored surface after playback multiplies the clip.
+			const motionScale = characterScaleFor(raw);
 			const targetCharacter = charactersRef.current.find((entry) => entry.id === targetCharacterId);
 			if (!targetCharacter) throw new Error(`Motion target ${targetCharacterId} no longer exists.`);
+			const sceneAnchorX = targetCharacter.x + normalizedCalibration.offsetX;
+			const sceneAnchorZ = targetCharacter.z + normalizedCalibration.offsetZ;
+			const sceneRotationDeg = rotationDeg + normalizedCalibration.yawDeg;
 			const rig = rigs[targetCharacter.id] ?? await waitForRig(targetCharacter.id);
 			// No explicit drop staged: a character standing on a raised object
 			// whose take walks off the edge falls on its own — ARDY motion is
 			// flat-ground, so the stage supplies the gravity.
+			const supports = authoredSupportDescriptors();
+			// A support's top is scene data, never guessed from the motion.  Apply
+			// only when the clip shows an upward root trend entering its footprint;
+			// ordinary deck walks remain byte-for-byte unchanged.
+			const raised = drop ? raw : applySupportRise(raw, supports, {
+				subjectX: sceneAnchorX,
+				subjectY: targetCharacter.y ?? 0,
+				subjectZ: sceneAnchorZ,
+				rotationDeg: sceneRotationDeg,
+				worldScale: motionScale,
+			});
 			const staging = drop ?? autoRoofDrop(
-				raw,
-				{ x: targetCharacter.x, z: targetCharacter.z, y: targetCharacter.y ?? 0, rotationDeg },
-				sceneObjects.map((object) => ({
-					x: object.x,
-					z: object.z,
-					rotDeg: object.rot ?? 0,
-					topY: (object.y ?? 0) + (object.height ?? 0) * (object.scaleY ?? 1),
-					width: (object.footprint?.width ?? 0) * (object.scaleX ?? 1),
-					depth: (object.footprint?.depth ?? 0) * (object.scaleZ ?? 1),
-				})),
+				raised,
+				{ x: sceneAnchorX, z: sceneAnchorZ, y: targetCharacter.y ?? 0, rotationDeg: sceneRotationDeg },
+				supports,
+				{ worldScale: motionScale },
 			);
-			const decoded = drop ? applyRootDrop(raw, staging) : applyAutoFall(raw, staging);
+			const decoded = drop ? applyRootDrop(raised, staging, { worldScale: motionScale }) : applyAutoFall(raised, staging, { worldScale: motionScale });
 			if (!drop && staging && !preview) {
 				setToast(ko(
 					`Auto drop staged: the take leaves its support at ${staging.fromS.toFixed(1)}s and falls ${staging.meters.toFixed(1)}m`,
@@ -5616,16 +5782,19 @@ globalThis.playMode = centerTab === "play";
 			// canonical, 1.
 			const scale = characterScaleFor(decoded);
 			const loaded = {
+			// Identity calibration retains the legacy frame-zero anchorX: targetCharacter.x
+			// and anchorZ: targetCharacter.z contract; calibrated takes use the scene anchor.
 			// Capture the exact prompt this motion was generated from; the
 			// timeline keeps showing it even if the input field is edited
 			// afterwards.
 			prompt: typeof prompt === "string" ? prompt : "",
 				...decoded,
 				url,
-				anchorX: targetCharacter.x,
-				anchorZ: targetCharacter.z,
+				anchorX: sceneAnchorX,
+				anchorZ: sceneAnchorZ,
 				anchorFrame: 0,
-				rotationDeg,
+				rotationDeg: sceneRotationDeg,
+				sceneCalibration: normalizedCalibration,
 				editSegments: createMotionEdit(decoded.frames),
 			};
 			setCharacters((list) => {
@@ -6432,6 +6601,10 @@ globalThis.playMode = centerTab === "play";
 				return { name: pack.name, entries: pack.entries.map((entry) => entry.name), byteLength: pack.bytes.byteLength, bytes: btoa(binary) };
 			},
 			renderPass: (kind) => liveStateRef.current.renderPassDataUrls([kind])[kind],
+			// QA-only video export (#193): the Export menu's Video item without the
+			// download, so a headless run can assert that a keyless 40-frame static
+			// shot yields 40 frames. Same liveStateRef reasoning as captureMeta.
+			exportShotVideo: (options = {}) => liveStateRef.current.exportShotVideo(options),
 			// The RGB plate the passes are compared against — same rig, same
 			// framing, no material override.
 			capturePlate: () => liveStateRef.current.captureFramingPng(liveStateRef.current.captureCurrentFraming()),
@@ -6460,7 +6633,7 @@ globalThis.playMode = centerTab === "play";
 			// the selected prop's route, so QA can aim a gesture at the line
 			objectPath: selectedSceneObject?.path ?? null,
 			pathPointIndex,
-			pathHandlesEnabled: centerTab === "scene" && !lookThroughShot && !ikMode && !posing && !playMode && !!selectedSceneObject?.path,
+			pathHandlesEnabled: !preview && !lookThroughShot && !ikMode && !posing && !!selectedSceneObject?.path,
 			scrub: (frame) => setTlFrame(Math.max(0, Math.min(tlFrameCount - 1, Math.round(frame)))),
 			pause: () => setTlPlaying(false),
 			// Motion-trail QA surface: read the current trail policy and drive the
@@ -6506,7 +6679,7 @@ globalThis.playMode = centerTab === "play";
 			apRun: runAutoPhysics,
 			physics: { preview: physicsPreview, show: physicsShow, running: autoPhysicsRunning, options: physicsOptions },
 			apOptions: changePhysicsOptions,
-			centerTab,
+			preview,
 			pathDraw,
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6514,7 +6687,7 @@ globalThis.playMode = centerTab === "play";
 		// close over them: a stale closure would report the set as it was two
 		// edits ago — and, after an undo that removes a subject, would keep
 		// reporting the ghost's capsules.
-	}, [activeRig, motion, tlFrame, ikMode, ikChains, ikFocus, ikTick, charA, committedIkEdits, waypoints, lookThroughShot, selectedSceneObject, sceneObjects, rigs, characters, pathPointIndex, centerTab, posing, playMode, pathDraw, trailEdit, trailFalloffFrames, trailFalloffS, ikEditTool, showTrails, physicsPreview, physicsShow, physicsOptions, autoPhysicsRunning]);
+	}, [activeRig, motion, tlFrame, ikMode, ikChains, ikFocus, ikTick, charA, committedIkEdits, waypoints, lookThroughShot, selectedSceneObject, sceneObjects, rigs, characters, pathPointIndex, preview, posing, playMode, pathDraw, trailEdit, trailFalloffFrames, trailFalloffS, ikEditTool, showTrails, physicsPreview, physicsShow, physicsOptions, autoPhysicsRunning]);
 	// QA hook (plan §6.5): exposes history depth and the present === objects
 	// invariant so the browser suite can assert undo entry counts directly.
 	// Reads live store state at call time; re-registered after every render.
@@ -6633,7 +6806,7 @@ globalThis.playMode = centerTab === "play";
 	// The follow camera owns the shot camera in the same situations key
 	// following would: never while an authoring mode holds the viewport.
 	const followCamActive =
-		activeCamera.mode !== "keys" && !!followTrack?.[tlFrame] && (centerTab === "play" || (!ikMode && !waypointMode && !posing));
+		activeCamera.mode !== "keys" && !!followTrack?.[tlFrame] && (preview || (!ikMode && !waypointMode && !posing));
 
 	// Implied locomotion speed per authored segment, on the timeline clock
 	// (m/s is physical, so the judge always uses tlFps). Shown in the
@@ -6753,84 +6926,41 @@ globalThis.playMode = centerTab === "play";
 		setPhotoPoseError("");
 		try {
 			if (!rig) throw new Error("rig-not-loaded");
-			if (!multiModelRestRef.current) {
-				const response = await fetch("/ardy/cskel27-rest.json").catch(() => null);
-				if (!response?.ok) throw new Error("rest-unavailable");
-				multiModelRestRef.current = await response.json().catch(() => {
-					throw new Error("rest-unavailable");
-				});
-			}
 			objectUrl = URL.createObjectURL(file);
 			let bones = null;
 			let rootY = 0;
-			let warning = "";
-			// Which measurement produced the pose. The GPU route and the browser
-			// landmarker differ by a class in depth accuracy, so a silent fallback
-			// left the user judging one while believing they saw the other.
-			let route = "gpu";
-			// GPU route first: SAM-3D-Body on the box MEASURES the body in 3D,
-			// which beats anything a browser landmarker can infer from one frame.
+			let gpuError = null;
+			// GVHMR on the box measures the body over the whole clip,
+			// which is more reliable than a single-frame depth estimate.
 			// The bridge wraps the still into a second of video and runs the exact
-			// footage pipeline; the in-browser landmark path below is the fallback
-			// for a missing bridge or a failed run, never the first choice.
+			// GVHMR footage pipeline. A missing bridge or another backend is an error.
 			try {
 				const health = await fetch("/ardy/health", { signal: AbortSignal.timeout(2000) }).catch(() => null);
-				if (health?.ok) {
-					const done = await requestBridgeExtract(file, {});
-					const take = await loadMotionFromUrl(done.motionUrl);
-					// The middle frame: the wrap's smoothing passes have settled
-					// there, while frame 0 can still carry filter warm-up.
-					const frame = Math.floor((take.frames - 1) / 2);
-					const snapshot = snapshotPlaybackBones(rig);
-					try {
-						applyMotionFrame(rig, { ...take, anchorFrame: frame }, frame);
-						bones = capturePose(rig);
-						// SAM measured the hips' true height — a crouch is a crouch
-						// because the hips came DOWN, not just because the knees bent.
-						rootY = captureHipsOffset(rig);
-					} finally {
-						restorePlaybackBones(rig, snapshot);
-					}
-				}
-			} catch (error) {
-				console.warn("photo pose: GPU extract failed, falling back to browser landmarks", error);
-			}
-			if (!bones) {
-				route = "browser";
-				if (!photoPoseDetectorRef.current) {
-					// "heavy", not the "full" the footage path uses: a photograph is one
-					// offline frame, so the ~25 MB one-time download and the several-times
-					// slower inference are paid once and buy accuracy no later step can
-					// recover. This ref only ever holds the photo detector, so caching it
-					// without a model key is safe.
-					photoPoseDetectorRef.current = await createPoseDetector({ runningMode: "IMAGE", model: "heavy" });
-				}
-				// One detection of one still is the least evidence this app ever works
-				// from, so the still is measured twice — as shot and mirrored — and
-				// averaged. Downstream sees one ordinary landmark sample at t=0.
-				const image = await decodeImage(objectUrl, { createImage: () => new Image() });
-				const landmarks = await detectMirrorAveraged(image, photoPoseDetectorRef.current.detect);
-				if (!landmarks) throw new Error("no-person-in-photo");
-				const samples = [{ timeS: 0, landmarks }];
-				const take = bakePoseFrame({ samples, rest: multiModelRestRef.current, createdMs: Date.now() });
-				// Pose the rig, read the pose back, then put the rig exactly as it was:
-				// the capture is the product, the posing is only how it is measured.
+				if (!health?.ok) throw new Error("extract-bridge-required");
+				const healthPayload = await health.json().catch(() => null);
+				if (healthPayload?.extractionBackend !== "gvhmr") throw new Error("extract-backend-unsupported");
+				const done = await requestBridgeExtract(file, {});
+				const take = await loadMotionFromUrl(done.motionUrl);
+				// The middle frame: the wrap's smoothing passes have settled
+				// there, while frame 0 can still carry filter warm-up.
+				const frame = Math.floor((take.frames - 1) / 2);
 				const snapshot = snapshotPlaybackBones(rig);
 				try {
-					applyMotionFrame(rig, { ...take, anchorFrame: 0 }, 0);
+					applyMotionFrame(rig, { ...take, anchorFrame: frame }, frame);
 					bones = capturePose(rig);
+					// GVHMR measured the hips' true height — a crouch is a crouch
+					// because the hips came DOWN, not just because the knees bent.
 					rootY = captureHipsOffset(rig);
 				} finally {
 					restorePlaybackBones(rig, snapshot);
 				}
-				warning = photoPoseWarning(take);
-				// Name the fallback in the same slot the fit warning uses: the
-				// landmark route is the reduced-accuracy path, and that is worth
-				// one sentence more than a partly-occluded limb.
-				const fallbackNote = ko("GPU pose extraction failed, so this pose came from the browser landmarker (less accurate in depth).", "GPU 자세 추출이 실패해서 브라우저 추정으로 잡았어요 (깊이 정확도가 낮아요).", "GPU 姿势提取失败，所以这次用的是浏览器估点（深度不太准）。");
-				warning = warning ? `${fallbackNote} ${warning}` : fallbackNote;
+
+			} catch (error) {
+				gpuError = error;
+				console.warn("photo pose: GVHMR extract failed", error);
+
 			}
-			console.info(`photo pose: route=${route}`);
+			if (!bones) throw new Error(gpuError?.message || "extract-run-failed");
 			const pose = {
 				id: `photo_${Date.now()}`,
 				label: ko(`Photo Pose ${customPoses.length + 1}`, `사진 포즈 ${customPoses.length + 1}`, `照片姿势 ${customPoses.length + 1}`),
@@ -6858,16 +6988,13 @@ globalThis.playMode = centerTab === "play";
 			else recordCharacterUndo();
 			updateCharacterAt(poseTargetIndex, { pose });
 			setPhotoPoseState("done");
-			// The pose is already saved and written by this point, so the warning
-			// only changes what the user is told, never whether the read happened.
-			// It takes the success slot rather than queueing a second toast: two
-			// toasts in a row means the first one is never read. (The GPU route
-			// leaves it empty — SAM measures the whole body or fails outright.)
-			setToast(warning
-				? (hadMotion ? `${ko("Cleared the motion.", "모션을 지웠어요.", "已清除动作。")} ${warning}` : warning)
-				: hadMotion
+
+			// The pose is already saved and written by this point. GVHMR either
+			// returns a measured pose or the named error above reaches the user.
+			setToast(hadMotion
 					? ko("Cleared the motion and posed from the photo — refine it with the handles", "모션을 지우고 사진으로 자세를 잡았어요 — 핸들로 다듬어 보세요", "已清除动作，并按照片摆好姿势 — 再用手柄微调")
 					: ko("Pose read from the photo — refine it with the handles", "사진에서 자세를 읽었어요 — 핸들로 다듬어 보세요", "已从照片读出姿势 — 用手柄再微调"));
+
 		} catch (error) {
 			const code = error?.message ?? String(error);
 			// fitLandmarksToPose refuses a sample whose torso is not visible; that is
@@ -7120,6 +7247,7 @@ globalThis.playMode = centerTab === "play";
 				previous.host === state.host &&
 				previous.encoder === state.encoder &&
 				previous.device === state.device &&
+				previous.extractionBackend === state.extractionBackend &&
 				previous.reason === state.reason
 					? previous
 					: state
@@ -8921,13 +9049,13 @@ function resizePromptClip(id, edge, rawFrame) {
 		poll();
 		const id = window.setInterval(poll, 250);
 		return () => window.clearInterval(id);
-		// lookThroughShot / centerTab / ikMode are dependencies even though the
+		// lookThroughShot / preview / ikMode are dependencies even though the
 		// body never reads them directly: they are what lineEditPane branches on,
 		// so a stale closure would keep measuring the camera the pane used to
 		// hold and a view SWITCH — the most obvious way to invalidate a curve —
 		// would go undetected. Lens and aspect changes need no dependency: they
 		// move fx/fy, which the comparison sees on its own.
-	}, [lineEditMode, lineCurve, lookThroughShot, centerTab, ikMode]);
+	}, [lineEditMode, lineCurve, lookThroughShot, preview, ikMode]);
 
 	// Wave-2 capability preflight. `checkBridge` reports health only, so the
 	// line-edit route is probed here: today's bridge IGNORES unknown request
@@ -9838,6 +9966,7 @@ function resizePromptClip(id, edge, rawFrame) {
 				prompt: entry.recipe?.blocks?.[0]?.prompt ?? motion?.prompt ?? "",
 				rootRotationDeg: motion?.rotationDeg ?? activeChar.rot,
 				anchor: { x: motion?.anchorX ?? activeChar.x, z: motion?.anchorZ ?? activeChar.z },
+				calibration: motion?.sceneCalibration ?? null,
 			}, entry.motionUrl);
 		} catch {
 			/* loadMotion already surfaced the decode failure in the panel */
@@ -9939,30 +10068,39 @@ function resizePromptClip(id, edge, rawFrame) {
 	 * lightweight motionRef is persisted with the entry either way, so the
 	 * clip can be re-fetched after a reload. */
 	async function deliverMotion(job, motionUrl) {
+		const calibration = job.calibration ?? job.sceneCalibration ?? null;
+		const normalizedCalibration = normalizeMotionCalibration(calibration);
+		const sceneAnchorX = job.anchor.x + normalizedCalibration.offsetX;
+		const sceneAnchorZ = job.anchor.z + normalizedCalibration.offsetZ;
+		const sceneRotationDeg = job.rootRotationDeg + normalizedCalibration.yawDeg;
 		const motionRef = {
 			url: motionUrl,
 			prompt: job.prompt,
-			rotationDeg: job.rootRotationDeg,
-			anchorX: job.anchor.x,
-			anchorZ: job.anchor.z,
+			rotationDeg: sceneRotationDeg,
+			anchorX: sceneAnchorX,
+			anchorZ: sceneAnchorZ,
 		};
+		if (calibration && typeof calibration === "object") motionRef.calibration = normalizedCalibration;
 		setCharacters((list) => list.map((entry) => entry.id === job.charId ? { ...entry, motionRef } : entry));
 		if (job.charId === loadedLayerCharRef.current) {
-			await loadMotion(motionUrl, job.prompt, job.rootRotationDeg);
+			await loadMotion(motionUrl, job.prompt, job.rootRotationDeg, null, job.charId, null, { calibration });
 			return;
 		}
 		// Inbound boundary for a clip delivered to a non-active layer.
-		const decoded = retimeMotion(await loadMotionFromUrl(motionUrl), TIMELINE_FPS);
+		const retimed = retimeMotion(await loadMotionFromUrl(motionUrl), TIMELINE_FPS);
+		const decoded = applyMotionCalibration(retimed, { ...normalizedCalibration, yawDeg: 0, offsetX: 0, offsetZ: 0 }).motion;
 		const clip = {
 			...decoded,
 			url: motionUrl,
 			prompt: job.prompt,
-			anchorX: job.anchor.x,
-			anchorZ: job.anchor.z,
+			anchorX: sceneAnchorX,
+			anchorZ: sceneAnchorZ,
 			anchorFrame: 0,
-			rotationDeg: job.rootRotationDeg,
+			rotationDeg: sceneRotationDeg,
+			sceneCalibration: normalizedCalibration,
 			editSegments: createMotionEdit(decoded.frames),
 		};
+		if (calibration && typeof calibration === "object") clip.sceneCalibration = normalizedCalibration;
 		// Same stature rule as loadMotion, on the layer that asked for the clip.
 		const scale = characterScaleFor(decoded);
 		motionFullRef.current.set(job.charId, clip);
@@ -9980,7 +10118,9 @@ function resizePromptClip(id, edge, rawFrame) {
 			// Inbound boundary: a re-fetched clip is retimed exactly like a
 			// freshly generated one, so a reload cannot resurrect 20 fps frames.
 			loadMotionFromUrl(entry.motionRef.url).then((raw) => {
-				const decoded = retimeMotion(raw, TIMELINE_FPS);
+				const retimed = retimeMotion(raw, TIMELINE_FPS);
+				const normalizedCalibration = normalizeMotionCalibration(entry.motionRef.calibration);
+				const decoded = applyMotionCalibration(retimed, { ...normalizedCalibration, yawDeg: 0, offsetX: 0, offsetZ: 0 }).motion;
 				const clip = {
 					...decoded,
 					url: entry.motionRef.url,
@@ -9989,8 +10129,10 @@ function resizePromptClip(id, edge, rawFrame) {
 					anchorZ: entry.motionRef.anchorZ,
 					anchorFrame: 0,
 					rotationDeg: entry.motionRef.rotationDeg,
+					sceneCalibration: normalizedCalibration,
 					editSegments: createMotionEdit(decoded.frames),
 				};
+				if (entry.motionRef.calibration) clip.sceneCalibration = entry.motionRef.calibration;
 				motionFullRef.current.set(entry.id, clip);
 				setCharacters((current) => current.map((item) => item.id === entry.id
 					// The stature rides inside the npz, so a restored take
@@ -10030,7 +10172,7 @@ function resizePromptClip(id, edge, rawFrame) {
 					: ko("Saved", "저장됨", "已保存");
 
 	return (
-		<div className={"app" + (renderActive ? "" : " render-idle")} data-workflow-mode={workflowMode} data-embed-mode={embedMode ? "playview" : undefined}>
+		<div className={"app" + (renderActive ? "" : " render-idle")} data-workflow-mode={workflowMode} data-embed-mode={embedMode ? "playview" : playgroundMode ? "playground" : undefined} data-playground-hint={playgroundMode ? playgroundHint ?? undefined : undefined} data-rail-draw={railDraw ? 1 : undefined}>
 			<header className="topbar">
 				<div className="logo">
 					<span className="wordmark">
@@ -10069,16 +10211,113 @@ function resizePromptClip(id, edge, rawFrame) {
 						>
 							{projectSaveState === "saving" ? ko("Saving…", "저장 중…", "保存中…") : ko("Save", "저장", "保存")}
 						</button>
-						<button
-							type="button"
-							className={"topbar-action project-export-action" + (recState === "recording" ? " recording" : "")}
-							data-testid="topbar-export"
-							disabled={recState !== "recording" && !hasCameraKeys && !motion}
-							onClick={toggleShotRecording}
-							title={ko("Export the current shot as an MP4", "현재 샷을 MP4로 내보내기", "把当前镜头导出为 MP4")}
-						>
-							{recState === "recording" ? ko("■ Stop", "■ 정지", "■ 停止") : ko("Export", "내보내기", "导出")}
-						</button>
+
+						{/* One Export menu for every delivery this studio makes (#193,
+						    R4). The keyframe pack leads because it is the pack an AI video
+						    tool is fed; items whose precondition is missing are not
+						    rendered disabled — the footer line says what to author first. */}
+						{/* One element cannot carry two data-testids: the topbar contract
+						    keeps the attribute, the menu contract gets the same handle as an
+						    id, so both selectors still reach this one trigger. */}
+						<div className="export-menu-wrap">
+							<button
+								type="button"
+								className={"topbar-action project-export-action" + (recState === "recording" ? " recording" : "")}
+								data-testid="topbar-export"
+								id="export-menu-trigger"
+								aria-expanded={exportMenuOpen}
+								aria-haspopup="menu"
+								title={ko("Exports: keyframe pack, video, passes, storyboard, cut list", "내보내기: 키프레임 팩·영상·패스·스토리보드·컷 목록", "导出：关键帧包、视频、通道、分镜、剪辑表")}
+								onClick={(event) => {
+									// The panel is fixed to the viewport and anchored to this
+									// trigger in JS, the way it was in the PlayView bar: one
+									// popover geometry for the studio's export menu wherever
+									// its trigger lives.
+									const box = event.currentTarget.getBoundingClientRect();
+									setExportMenuAnchor({ top: box.bottom + 6, right: Math.max(8, window.innerWidth - box.right) });
+									setExportMenuOpen((open) => !open);
+								}}
+							>
+								{recState === "recording" ? ko("■ Stop", "■ 정지", "■ 停止") : ko("Export", "내보내기", "导出")}
+								<span className="caret">▾</span>
+							</button>
+							{exportMenuOpen && (
+								<div
+									className="project-menu export-menu"
+									role="menu"
+									style={{ top: `${exportMenuAnchor.top}px`, right: `${exportMenuAnchor.right}px` }}
+									onClick={() => setExportMenuOpen(false)}
+								>
+									<button
+										type="button"
+										role="menuitem"
+										className="export-menu-primary"
+										data-testid="export-keyframe-pack"
+										disabled={!shots.length || recState === "recording"}
+										data-disabled-reason={shots.length ? undefined : "no-shots"}
+										title={shots.length
+											? ko("First/last frames, clip, camera and prompt as one zip — hold Shift for every shot", "첫/마지막 프레임·클립·카메라·프롬프트를 zip 하나로 — Shift를 누르면 모든 샷", "起止帧、片段、相机和提示词打成一个 zip — 按住 Shift 导出所有镜头")
+											: ko("Add a shot first — a pack describes one cut", "샷을 먼저 추가하세요 — 팩은 컷 하나를 설명합니다", "请先加一条镜头 — 包描述的是一刀")}
+										onClick={(event) => void exportKeyframePacks(event.shiftKey)}
+									>
+										{ko("Keyframe pack (zip)", "키프레임 팩 (zip)", "关键帧包 (zip)")}
+										<small>{ko("Shift: every shot", "Shift: 모든 샷", "Shift：所有镜头")}</small>
+									</button>
+									{(shots.length > 0 || hasCameraKeys || motion) && (
+										<button
+											type="button"
+											role="menuitem"
+											data-testid="export-video"
+											title={ko("Render the shot to an MP4 — camera move and character motion, no editor chrome", "샷을 MP4로 렌더링합니다 — 카메라 움직임과 캐릭터 모션만, 편집 UI는 제외", "把镜头渲成 MP4 — 只有相机运动和人物动作，不含编辑界面")}
+											onClick={() => void exportShotVideo()}
+										>
+											{recState === "recording" ? ko("■ Stop", "■ 정지", "■ 停止") : ko("Video (mp4)", "영상 (mp4)", "视频 (mp4)")}
+										</button>
+									)}
+									<button
+										type="button"
+										role="menuitem"
+										data-testid="export-render-passes"
+										title={ko("Depth and normal conditioning plates of the current framing", "현재 프레이밍의 뎁스·노멀 컨디션 플레이트", "当前构图的深度和法线条件板")}
+										onClick={exportRenderPasses}
+									>
+										{ko("Depth + normal passes", "뎁스 + 노멀 패스", "深度 + 法线通道")}
+									</button>
+									<button
+										type="button"
+										role="menuitem"
+										data-testid="export-storyboard"
+										disabled={!shots.length}
+										data-disabled-reason={shots.length ? undefined : "no-shots"}
+										title={shots.length
+											? ko("Contact sheet of every shot with its prompt", "모든 샷과 프롬프트를 담은 콘택트 시트", "每条镜头及其提示词的样片表")
+											: ko("Add a shot first — a storyboard is one row per shot", "샷을 먼저 추가하세요 — 스토리보드는 샷마다 한 줄입니다", "请先加一条镜头 — 分镜是每镜一行")}
+										onClick={() => void exportStoryboard()}
+									>
+										{ko("Storyboard (PNG)", "스토리보드 (PNG)", "分镜 (PNG)")}
+									</button>
+									{shots.length > 0 && (
+										<button
+											type="button"
+											role="menuitem"
+											data-testid="export-otio"
+											title={ko("Download OTIO cut list", "OTIO 컷 목록 다운로드", "下载 OTIO 剪辑表")}
+											onClick={downloadOtioCutList}
+										>
+											{ko("OTIO cut list", "OTIO 컷 목록", "OTIO 剪辑表")}
+										</button>
+									)}
+									{!shots.length && (
+										<p className="export-menu-hint">
+											{hasCameraKeys || motion
+												? ko("Add a shot to export OTIO", "OTIO를 내보내려면 샷을 추가하세요", "要导出 OTIO，请先加一条镜头")
+												: ko("Add a shot to export video or OTIO", "영상·OTIO를 내보내려면 샷을 추가하세요", "要导出视频或 OTIO，请先加一条镜头")}
+										</p>
+									)}
+								</div>
+							)}
+						</div>
+
 						<span
 							className={"project-save-status status-" + projectSaveState}
 							data-testid="project-save-status"
@@ -10088,28 +10327,14 @@ function resizePromptClip(id, edge, rawFrame) {
 							{projectStatus}
 						</span>
 					</div>
-					<button
-						type="button"
-						className="auto-color-toggle"
-						aria-pressed={autoColor}
-						title={ko("Distinct display colors per object — captures include them while on", "오브젝트별 구분 색 — 켜둔 동안 캡처에도 포함됩니다", "每个物体用不同显示色 — 开着时截帧也会带上")}
-						 onClick={() => {
-							setAutoColor((on) => {
-								saveAutoColor(!on);
-								trackFeature("auto_color");
-								return !on;
-							});
-						}}
-					>
-						{ko("Auto Color", "자동 색", "自动颜色")}
-					</button>
+
+
 					{liveWorkspaceHandle && (
 						<span className="live-workspace-handle" data-live-workspace={liveWorkspaceHandle} title={liveWorkspaceHandle}>
 							{ko("Live workspace", "라이브 작업공간", "实时工作区")} {liveWorkspaceHandle}
 						</span>
 					)}
-					<LocaleToggle />
-					<AnalyticsToggle />
+					<SettingsMenu />
 				</div>
 			</header>
 
@@ -10119,10 +10344,11 @@ function resizePromptClip(id, edge, rawFrame) {
 				{/* Project > Scene: the project is the document root, scenes live
 				    inside it — the picker sits at the top of the hierarchy column. */}
 				<div className="hierarchy-project" data-dirty={projectDirty || undefined}>
+
 					<span className="hierarchy-project-label">{ko("Project", "프로젝트", "项目")}</span>
 					<strong>{projectName ?? (projectStartupOpen ? ko("Choose Project", "프로젝트 선택", "选择项目") : ko("Untitled", "제목 없음", "未命名"))}</strong>
 					{projectDirty && <i className="project-dirty-dot" aria-label={ko("Unsaved changes", "저장되지 않은 변경사항", "未保存的更改")} />}
-					<button type="button" onClick={() => { setProjectStartupOpen(false); setProjectBrowserOpen(true); }}>{ko("Projects…", "프로젝트…", "项目…")}</button>
+
 				</div>
 				<HierarchyPanel
 					selectedId={selectedHierarchyId}
@@ -10140,7 +10366,6 @@ function resizePromptClip(id, edge, rawFrame) {
 					sceneObjects={sceneObjects}
 					scenes={scenes}
 					activeSceneId={activeSceneId}
-					beginnerMode={!advancedMode}
 					onSceneSelect={selectSceneDocument}
 					onSceneCreate={createSceneDocumentFromUi}
 					onSceneDuplicate={duplicateSceneDocumentFromUi}
@@ -10182,28 +10407,9 @@ function resizePromptClip(id, edge, rawFrame) {
 						</button>
 					))}
 				</div>
-				<div className="pane-tabs" role="tablist" aria-label={ko("Center view", "가운데 보기", "视图居中")}>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={centerTab === "scene"}
-						className={centerTab === "scene" ? "active" : ""}
-						onClick={() => setCenterTab("scene")}
-					>
-						{ko("Scene", "장면", "场景")}
-					</button>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={centerTab === "play"}
-						className={centerTab === "play" ? "active" : ""}
-						onClick={() => setCenterTab("play")}
-					>
-						{ko("PlayView", "재생 보기", "PlayView")}
-					</button>
-				</div>
-				{centerTab === "scene" ? (
+
 				<div className="editor-toolbar scene-tools" aria-label={ko("Scene tools", "장면 도구", "场景工具")}>
+
 					{workflowMode === "motion" && (
 						<span className="workflow-toolbar-hint" role="status">
 							{ko("Motion mode · edit the timeline below", "모션 모드 · 아래 타임라인에서 편집하세요", "动作模式 · 在下方时间轴编辑")}
@@ -10251,15 +10457,8 @@ function resizePromptClip(id, edge, rawFrame) {
 						>
 							{ko("Snap", "스냅", "吸附")}
 						</button>
-						<button
-							type="button"
-							className={"snap-switch grid-view-switch workflow-scene-context" + (gridView ? " active" : "")}
-							title={ko("Blender-style viewport — dark void with a reference grid instead of the deck", "Blender식 뷰포트 — 데크 대신 어두운 배경과 기준 그리드", "Blender 式视口 — 不用台面，改用深色背景和参考网格")}
-							aria-pressed={gridView}
-							onClick={() => setGridView((v) => !v)}
-						>
-							{ko("Grid", "그리드", "网格")}
-						</button>
+
+
 						<span className="viewport-toolbar-separator settings-separator workflow-camera-context" aria-hidden="true" />
 						<label className="viewport-toolbar-field shot-field workflow-camera-context">
 							<span>{ko("Shot", "샷", "镜头")}</span>
@@ -10336,111 +10535,147 @@ function resizePromptClip(id, edge, rawFrame) {
 						>
 							{ko("Top", "탑", "顶")} {workspaceLayout.insetCollapsed ? "▸" : "▾"}
 						</button>
-					</div>
-				) : (
-					<div className="editor-toolbar play-tools" aria-label={ko("PlayView tools", "재생 보기 도구", "PlayView 工具")}>
-						<span className="viewport-readout">{shotOutput.label}</span>
-						<span className="viewport-readout">FOV {Math.round(fovDeg)}° · {shot.focalMm}mm</span>
-						<span className="viewport-toolbar-spacer" />
-						<button type="button" onClick={() => stepFrame(-1)} aria-label={ko("Previous frame", "이전 프레임", "上一帧")}>◀</button>
-						<button
-							type="button"
-							aria-label={tlPlaying ? ko("Pause playback", "재생 일시중지", "暂停播放") : ko("Play playback", "재생 시작", "开始播放")}
-							title={tlPlaying ? ko("Pause playback", "재생 일시중지", "暂停播放") : ko("Play playback", "재생 시작", "开始播放")}
-							onClick={() => setTlPlaying((value) => !value)}
-						>
-							{tlPlaying ? "Ⅱ" : "▶"}
-						</button>
-						<button type="button" onClick={() => stepFrame(1)} aria-label={ko("Next frame", "다음 프레임", "下一帧")}>▶│</button>
-						<span className="viewport-readout">1.00×</span>
-						<span className="viewport-toolbar-separator" aria-hidden="true" />
-						<button
-							type="button"
-							disabled={!shots.length}
-							aria-label={ko("Download OTIO cut list", "OTIO 컷 목록 다운로드", "下载 OTIO 剪辑表")}
-							title={ko("Download OTIO cut list", "OTIO 컷 목록 다운로드", "下载 OTIO 剪辑表")}
-							onClick={downloadOtioCutList}
-						>
-							OTIO
-						</button>
-						{/* Reference exports a video model asks for. They sit behind one
-						    trigger because each is a whole render pass, not a toggle — and
-						    the PlayView bar has no room for three more labelled buttons. */}
-						<div className="export-menu-wrap">
+
+						{/* One menu for every viewport-look toggle (R4), in every mode:
+						    what the stage LOOKS like is not a mode's business. The 27px
+						    bar clips its own overflow, so the panel is fixed to the
+						    viewport and anchored to the trigger, like the export menu.
+						    Items keep the menu open: these are toggles you compare, not
+						    commands you fire. */}
+						<div className="view-menu-wrap">
+
 							<button
 								type="button"
-								className="export-menu-trigger"
-								data-testid="export-menu-trigger"
-								aria-expanded={exportMenuOpen}
+								className="view-menu-trigger"
+								data-testid="view-menu-trigger"
+								ref={viewMenuTriggerRef}
 								aria-haspopup="menu"
-								title={ko("Reference exports for AI video tools", "AI 영상 도구용 레퍼런스 내보내기", "导出给 AI 视频工具的参考")}
+
+								aria-expanded={viewMenuOpen}
+								title={ko("Viewport display toggles", "뷰포트 표시 토글", "视口显示开关")}
+
 								onClick={(event) => {
-									// The 27px title bar clips its own overflow (the scene
-									// toolbar scrolls inside it), so an absolutely positioned
-									// popover would be cut off at the bar's edge. The panel is
-									// fixed to the viewport instead, anchored to this trigger.
 									const box = event.currentTarget.getBoundingClientRect();
-									setExportMenuAnchor({ top: box.bottom + 6, right: Math.max(8, window.innerWidth - box.right) });
-									setExportMenuOpen((open) => !open);
+									setViewMenuAnchor({ top: box.bottom + 6, right: Math.max(8, window.innerWidth - box.right) });
+									setViewMenuOpen((open) => !open);
 								}}
 							>
-								{ko("Export", "내보내기", "导出")}
+
+								{ko("View", "보기", "视图")}
+
 								<span className="caret">▾</span>
+								{viewLooksActive && <span className="view-menu-dot" data-testid="view-menu-dot" aria-hidden="true" />}
 							</button>
-							{exportMenuOpen && (
+							{viewMenuOpen && (
 								<div
-									className="project-menu export-menu"
+									className="project-menu view-menu"
 									role="menu"
-									style={{ top: `${exportMenuAnchor.top}px`, right: `${exportMenuAnchor.right}px` }}
-									onClick={() => setExportMenuOpen(false)}
+									aria-label={ko("Viewport display", "뷰포트 표시", "视口显示")}
+									style={{ top: `${viewMenuAnchor.top}px`, right: `${viewMenuAnchor.right}px` }}
 								>
+									{/* aria-pressed rides along with aria-checked: the toggles
+									    published that state contract in their old homes and QA
+									    still reads it, so the move keeps the signpost (R9). */}
 									<button
 										type="button"
-										role="menuitem"
-										data-testid="export-keyframe-pack"
-										disabled={!shots.length || recState === "recording"}
-										title={ko("First/last frames, clip, camera and prompt as one zip — hold Shift for every shot", "첫/마지막 프레임·클립·카메라·프롬프트를 zip 하나로 — Shift를 누르면 모든 샷", "起止帧、片段、相机和提示词打成一个 zip — 按住 Shift 导出所有镜头")}
-										onClick={(event) => void exportKeyframePacks(event.shiftKey)}
+
+										role="menuitemcheckbox"
+										className={"view-menu-item grid-view-switch" + (gridView ? " active" : "")}
+										aria-checked={gridView}
+										aria-pressed={gridView}
+										title={ko("Blender-style viewport — dark void with a reference grid instead of the deck", "Blender식 뷰포트 — 데크 대신 어두운 배경과 기준 그리드", "Blender 式视口 — 不用台面，改用深色背景和参考网格")}
+										onClick={() => setGridView((v) => !v)}
 									>
-										{ko("Keyframe pack", "키프레임 팩", "关键帧包")}
-										<small>{ko("Shift: every shot", "Shift: 모든 샷", "Shift：所有镜头")}</small>
+										<span className="view-menu-mark" aria-hidden="true">{gridView ? "✓" : ""}</span>
+										{ko("Reference grid", "기준 그리드", "参考网格")}
 									</button>
 									<button
 										type="button"
-										role="menuitem"
-										data-testid="export-render-passes"
-										title={ko("Depth and normal conditioning plates of the current framing", "현재 프레이밍의 뎁스·노멀 컨디션 플레이트", "当前构图的深度和法线条件板")}
-										onClick={exportRenderPasses}
+										role="menuitemcheckbox"
+										className={"view-menu-item auto-color-toggle" + (autoColor ? " active" : "")}
+										aria-checked={autoColor}
+										aria-pressed={autoColor}
+										title={ko(
+											"Distinct display colors per object — captures include them while on",
+											"오브젝트별 구분 색 — 켜둔 동안 캡처에도 포함됩니다",
+										)}
+										onClick={() => {
+											setAutoColor((on) => {
+												saveAutoColor(!on);
+												trackFeature("auto_color");
+												return !on;
+											});
+										}}
 									>
-										{ko("Depth + normal passes", "뎁스 + 노멀 패스", "深度 + 法线通道")}
+										<span className="view-menu-mark" aria-hidden="true">{autoColor ? "✓" : ""}</span>
+										{ko("Auto Color", "자동 색", "自动颜色")}
+
 									</button>
-									<button
-										type="button"
-										role="menuitem"
-										data-testid="export-storyboard"
-										disabled={!shots.length}
-										title={ko("Contact sheet of every shot with its prompt", "모든 샷과 프롬프트를 담은 콘택트 시트", "每条镜头及其提示词的样片表")}
-										onClick={() => void exportStoryboard()}
-									>
-										{ko("Storyboard", "스토리보드", "分镜")}
-									</button>
+									{/* Part colours repaint a BODY, so the section only exists
+									    while a character is selected (R2). */}
+									{isCharacterSelection && (
+										<div className="view-menu-group" role="group" aria-label={ko("Body part colours", "부위 색상", "部位颜色")}>
+											<span className="view-menu-label" aria-hidden="true">{ko("Body part colours", "부위 색상", "部位颜色")}</span>
+											{[
+												{ value: "off", label: ko("Off", "끕", "关") },
+												{ value: "shaded", label: ko("Shaded", "음영", "着色") },
+												{ value: "flat", label: ko("Flat", "평면", "平面") },
+											].map((option) => {
+												const checked = option.value === partColoursChoice;
+												return (
+													<button
+														type="button"
+														key={option.value}
+														role="menuitemradio"
+														className={"view-menu-item part-colour-option" + (checked ? " active" : "")}
+														data-part-colours={option.value}
+														aria-checked={checked}
+														onClick={() => {
+															setPartColoursEnabled(option.value !== "off");
+															if (option.value !== "off") setPartColoursMode(option.value);
+														}}
+													>
+														<span className="view-menu-mark" aria-hidden="true">{checked ? "✓" : ""}</span>
+														{option.label}
+													</button>
+												);
+											})}
+										</div>
+									)}
+									{/* Panel visibility belongs to the same menu (R4): the
+									    agent column is something you show, not a mode, so it
+									    gets a checkmark here instead of a topbar button. */}
+									{!embedMode && (
+										<div className="view-menu-group" role="group" aria-label={ko("Panels", "패널", "面板")}>
+											<span className="view-menu-label" aria-hidden="true">{ko("Panels", "패널", "面板")}</span>
+											<button
+												type="button"
+												role="menuitemcheckbox"
+												className={"view-menu-item agent-panel-toggle" + (agentCollapsed ? "" : " active")}
+												aria-checked={!agentCollapsed}
+												aria-pressed={!agentCollapsed}
+												title={ko("Show the agent chat column (Cmd/Ctrl+B)", "에이전트 채팅 열 표시 (Cmd/Ctrl+B)", "显示 Agent 对话栏 (Cmd/Ctrl+B)")}
+												onClick={() => window.dispatchEvent(new CustomEvent("cozyclay:agent-panel-toggle"))}
+											>
+												<span className="view-menu-mark" aria-hidden="true">{agentCollapsed ? "" : "✓"}</span>
+												{ko("Agent panel", "에이전트 패널", "Agent 面板")}
+											</button>
+										</div>
+									)}
 								</div>
 							)}
 						</div>
-						<button
-							type="button"
-							className={recState === "recording" ? "recording" : ""}
-							aria-label={recState === "recording" ? ko("Stop recording", "녹화 중지", "停止录制") : ko("Record shot", "샷 녹화", "录制镜头")}
-							title={recState === "recording" ? ko("Stop recording", "녹화 중지", "停止录制") : ko("Record shot", "샷 녹화", "录制镜头")}
-							disabled={recState !== "recording" && !hasCameraKeys && !motion}
-							onClick={toggleShotRecording}
-						>
-							{recState === "recording" ? ko("■ Stop", "■ 정지", "■ 停止") : ko("● Record", "● 녹화", "● 录制")}
-						</button>
+
+
 					</div>
-				)}
 				</div>
 
+					{/* Sits under the mode tabs and left of the Top-View inset, over the
+					    stage it is teaching. The overlay itself never takes the pointer
+					    (styles.css) — every step is completed in the studio underneath. */}
+					{cameraTutorial && !embedMode && (
+						<CameraTutorial previewing={lookThroughShot} onClose={() => setCameraTutorial(false)} />
+					)}
 					<div className="stage" id="stage" ref={stageRef} data-render-loop={renderActive ? "always" : "demand"}>
 						{/* Shadows were off, so every castShadow in props.jsx was inert and
 						    nothing on the open stage ever touched the floor. A contact
@@ -10490,7 +10725,7 @@ function resizePromptClip(id, edge, rawFrame) {
 							<KeyLightPuck
 								keyLight={keyLight}
 								selected={keyLightSelected}
-								visible={centerTab === "scene" && !lookThroughShot && !playMode}
+								visible={!preview && !lookThroughShot}
 								paneRef={mainPaneRef}
 								camRef={editorCamRef}
 								onSelect={() => selectHierarchy("light")}
@@ -10625,12 +10860,12 @@ function resizePromptClip(id, edge, rawFrame) {
 								// waypoint scrubs the playhead as a side effect, and follow
 								// must not turn that scrub into a camera lurch. Same for IK
 								// and pose studio, where the shot camera is deliberately frozen.
-								// PlayView is the finished-output player: the move always rides
+								// Preview is the finished-output player: the move always rides
 								// the playhead there. The Follow toggle and authoring-mode gates
-								// only protect the Scene tab's manipulation surfaces.
+								// only protect the editor view's manipulation surfaces.
 								// This shot's Camera Block owns the camera while Follow or Rail is active;
 								// editorial camera keys resume when the block returns to Keys mode.
-								following={!followCamActive && hasCameraKeys && (centerTab === "play" || (moveFollow && !ikMode && !waypointMode && !posing))}
+								following={!followCamActive && hasCameraKeys && (preview || (moveFollow && !ikMode && !waypointMode && !posing))}
 								followFrame={tlFrame}
 								fps={tlFps}
 								keys={cameraKeys}
@@ -10688,6 +10923,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								onDragEnd={ikDragEnd}
 							/>
 							<PlanBoard
+								minimal={playgroundMode}
 								hostRef={planHostRef}
 								planCamRef={planCamRef}
 								shotCamRef={shotCamRef}
@@ -10762,7 +10998,23 @@ function resizePromptClip(id, edge, rawFrame) {
 									changeCameraRail(simplified);
 									setRailDraw(false);
 									const curve = buildRail(simplified);
+
+									if (playgroundMode && activeShot && curve) {
+										// Playground: a first-timer drew a dolly and wants to see the
+										// whole ride. Stretch the cut to the rail's travel time at the
+										// dolly's speed cap and put them behind the shot camera, so ▶
+										// plays the move full-screen instead of in the corner monitor.
+										const speed = Math.max(0.2, activeCamera.followCam?.maxDollySpeed ?? 4);
+										const travel = Math.ceil((curve.length / speed) * tlFps) + Math.round(tlFps * 0.5);
+										const endFrame = Math.min(tlFrameCount - 1, activeShot.startFrame + Math.max(travel, activeShot.endFrame - activeShot.startFrame));
+										setShots((current) => resizeShot(current, activeShot.id, "end", endFrame, tlFrameCount));
+										enterPreview();
+										setTlFrame(activeShot.startFrame);
+										setToast(ko("Rail drawn — you are looking through the shot camera. Press ▶ to ride it; Esc goes back to flying.", "레일 완성 — 샷 카메라 시점으로 전환했습니다. ▶ 로 재생, Esc 로 복귀", "轨道已画好 — 已切到镜头相机。按 ▶ 播放，Esc 返回"));
+										return;
+									}
 									setToast(ko(`Camera rail drawn — ${curve ? curve.length.toFixed(1) : "?"} m, ${simplified.length} control points`, `카메라 레일 완성 — ${curve ? curve.length.toFixed(1) : "?"} m, 제어점 ${simplified.length}개`, `相机轨道已完成 — ${curve ? curve.length.toFixed(1) : "?"} m，${simplified.length} 个控制点`));
+
 								}}
 								onPathStroke={(stroke) => {
 									if (!selectedSceneObject) return;
@@ -10809,7 +11061,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								onGroundClick={waypointMode && !planIsMain ? addFloorWaypoint : undefined}
 								claimPointer={lineEditMode ? lineGrabProbe : undefined}
 							/>
-							{centerTab === "scene" && railCurve && (
+							{!preview && railCurve && (
 								<CameraRailScenePreview
 									points={railCurve.points}
 									cumLen={railCurve.cumLen}
@@ -10820,7 +11072,7 @@ function resizePromptClip(id, edge, rawFrame) {
 							<ObjectPathHandles
 								path={selectedSceneObject?.path ?? null}
 								selectedIndex={pathPointIndex}
-								enabled={centerTab === "scene" && !lookThroughShot && !ikMode && !posing && !playMode && !!selectedSceneObject?.path}
+								enabled={!preview && !lookThroughShot && !ikMode && !posing && !!selectedSceneObject?.path}
 								paneRef={mainPaneRef}
 								camRef={editorCamRef}
 								onSelect={setPathPointIndex}
@@ -10841,7 +11093,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								crane={activeCamera.craneHeight}
 								controlPoints={activeCamera.cameraRail}
 								selectedIndex={craneSelectedIndex}
-								enabled={centerTab === "scene" && !lookThroughShot && !ikMode && !posing && !playMode && !!railCurve && !!activeCamera.craneHeight}
+								enabled={!preview && !lookThroughShot && !ikMode && !posing && !!railCurve && !!activeCamera.craneHeight}
 								paneRef={mainPaneRef}
 								camRef={editorCamRef}
 								onSelect={setCraneSelectedIndex}
@@ -10882,10 +11134,10 @@ function resizePromptClip(id, edge, rawFrame) {
 								camRef={shotCamRef}
 								fovDeg={fovDeg}
 								aspect={shotOutput.aspect}
-								visible={centerTab === "scene" && !lookThroughShot && !ikMode && !posing}
+								visible={!preview && !lookThroughShot && !ikMode && !posing}
 								selected={shotCameraSelected}
 							/>
-							{waypointMode && centerTab === "scene" && (
+							{waypointMode && !preview && (
 								<ShotPathPreview waypoints={waypoints} start={charA} activeWaypointId={activeWaypointId} />
 							)}
 							<CaptureRig
@@ -10923,7 +11175,10 @@ function resizePromptClip(id, edge, rawFrame) {
 								editorCamRef={editorCamRef}
 								ikMode={ikMode}
 								planIsMain={planIsMain}
-								playMode={playMode}
+								// Preview IS PlayView's render path: DualRender tests this branch
+								// first, so look-through lands in the letterboxed, chrome-free
+								// player rather than the editing draw that keeps the plan inset.
+								playMode={preview}
 								lookThrough={lookThroughShot}
 								insetCollapsed={workspaceLayout.insetCollapsed || workflowMode === "motion"}
 								planZoom={workspaceLayout.planZoom}
@@ -11033,9 +11288,11 @@ function resizePromptClip(id, edge, rawFrame) {
 								<button
 									type="button"
 									className="vp-look-through"
+
 									aria-label={ko("Look through the shot camera", "샷 카메라 시점으로 보기", "从镜头相机看")}
-									title={ko("Fly the shot camera itself (Esc returns)", "샷 카메라를 직접 조종 (Esc로 복귀)", "直接操纵镜头相机（Esc 返回）")}
-									onClick={() => setLookThroughShot(true)}
+									title={ko("Look through the shot camera — the framed player, no editing chrome (Esc returns)", "샷 카메라 시점으로 보기 — 편집 도구 없는 플레이어 (Esc로 복귀)", "从镜头相机看 — 只有取景画面，没有编辑界面（Esc 返回）")}
+									onClick={enterPreview}
+
 								>
 									<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
 										<path d="M15 3h6v6" />
@@ -11046,12 +11303,17 @@ function resizePromptClip(id, edge, rawFrame) {
 								</button>
 							</span>
 						</div>
-						{lookThroughShot && !playMode && !ikMode && (
+						{/* The player's only visible affordance: without it Esc would be
+						    the sole way back, and the embed has no way back at all — the
+						    Workflow node's preview is meant to stay in the shot view. */}
+						{lookThroughShot && !ikMode && !embedMode && (
 							<button
 								type="button"
 								className="vp-inset-tag vp-look-through-exit"
+
 								title={ko("Return to the editor view (Esc)", "에디터 시점으로 돌아가기 (Esc)", "回到编辑视图 (Esc)")}
-								onClick={() => setLookThroughShot(false)}
+								onClick={exitPreview}
+
 							>
 								<span className="vp-rec-dot" aria-hidden="true" />
 								{ko("Shot camera", "샷 카메라", "镜头相机")}
@@ -11059,7 +11321,10 @@ function resizePromptClip(id, edge, rawFrame) {
 							</button>
 						)}
 
-						{lookThroughShot && !playMode && !ikMode && (
+						{/* Composition guides are an opt-in viewer preference (default off),
+						    so they follow the shot camera into the player rather than being
+						    counted as chrome. */}
+						{lookThroughShot && !ikMode && (
 							<ShotGuideOverlay mode={guideMode} aspect={shotOutput.aspect} className="lookthrough" />
 						)}
 						<div className="film-frame" hidden={playMode || !lookThroughShot}>
@@ -11072,21 +11337,8 @@ function resizePromptClip(id, edge, rawFrame) {
 							{subjectVisible ? slateLineKo(shot) : ko("SUBJECT OUT OF FRAME", "피사체가 프레임 밖에 있어요", "人物出画了")}
 						</div>
 
-						{playMode && !motion && (
-							<div className="playview-empty" role="status">
-								<strong>{ko("No motion yet", "아직 모션이 없어요", "还没有动作")}</strong>
-								{bridge?.ok ? (
-									<span>{ko("Generate motion in the Scene tab — PlayView plays the finished result.", "장면 탭에서 모션을 생성하세요. 재생 보기는 완성 결과를 보여줍니다.", "在场景页生成动作 — PlayView 播放完成结果。")}</span>
-								) : (
-									<>
-										<span>{ko("This hosted demo loads a sample walk cycle for you — switch to the Scene tab and press play.", "이 데모는 샘플 걷기 모션을 불러왔어요 — 장면 탭에서 재생을 눌러보세요.", "这个演示已经帮你载入了一段走路 — 切到场景页按播放。")}</span>
-										<button type="button" className="btn ghost" onClick={() => { setCenterTab("scene"); track("sample:played", { from: "playview_empty" }); }}>
-											{ko("▶ Watch the sample", "▶ 샘플 구경하기", "▶ 看看示例")}
-										</button>
-									</>
-								)}
-							</div>
-						)}
+
+
 
 						</div>
 					</div>
@@ -11152,10 +11404,12 @@ function resizePromptClip(id, edge, rawFrame) {
 
 					{/* Camera animation is authored against the same playhead as motion,
 					    so keep its controls beside the Motion tools as well as Shot setup. */}
-					<Foldout hidden={!advancedMode || !keyLightSelected} title={ko("Light", "조명", "灯光")}>
+
+					<Foldout hidden={!keyLightSelected} title={ko("Light", "조명", "灯光")}>
 						<p className="hint">{ko("Drag the sun in the scene to move the light. Shadows and warmth follow it.", "씬의 해를 드래그해 조명을 옮깁니다. 그림자와 빛의 방향이 따라옵니다.", "在场景里拖太阳来挪灯光。阴影和冷暖会跟着走。")}</p>
 						<Slider label={ko("Brightness", "밝기", "亮度")} min={0} max={4} step={0.05} value={keyLight.intensity} onChange={(value) => setKeyLight((current) => createKeyLight({ ...current, intensity: value }))} />
 						<Slider label={ko("Warm ↔ Cool", "따뜻함 ↔ 차가움", "暖 ↔ 冷")} min={0} max={1} step={0.05} value={keyLight.warmth ?? 0.5} onChange={(value) => setKeyLight((current) => createKeyLight({ ...current, warmth: value }))} />
+
 						<div className="readout">
 							<span title={ko("light position", "조명 위치", "灯光位置")}>{`x ${keyLight.x.toFixed(1)}  y ${keyLight.y.toFixed(1)}  z ${keyLight.z.toFixed(1)}`}</span>
 						</div>
@@ -11163,29 +11417,22 @@ function resizePromptClip(id, edge, rawFrame) {
 							{ko("Reset light", "조명 초기화", "重置灯光")}
 						</button>
 					</Foldout>
+
+					{/* Lens, Recenter and Record used to live here as well as in the
+					    viewport camera bar and the topbar Export menu. One home each
+					    (#193, R1): framing is the bar's job, delivery is Export's, and
+					    selecting the camera now switches to Camera mode so the bar's
+					    controls are on screen when this panel opens. */}
 					<Foldout hidden={!isCameraSelection} title={ko("Camera", "카메라", "相机")}>
-					<Slider label={ko("Lens (FOV)", "렌즈 (FOV)", "镜头 (FOV)")} min={14} max={90} step={1} value={fovDeg} unit="°" onChange={setFovDeg} />
+
 						<div className="readout">
 						<span title={ko("camera to subject", "카메라와 피사체 거리", "相机到人物")}>{shot.distance.toFixed(2)} m</span>
 						<span title={ko("nearest prime on the cropped filmback", "크롭된 필름백 기준 가장 가까운 단렌즈", "裁切画幅上最近的定焦")}>{shot.focalMm} mm</span>
 						<span title={ko("angle relative to the subject's eyes", "피사체 눈높이 기준 각도", "相对人物眼睛的角度")}>{shot.elevationDeg.toFixed(0)}°</span>
 						</div>
-						<button className="btn ghost" onClick={() => setNonce((n) => n + 1)}>
-							{ko("Recenter on subject", "피사체 다시 맞추기", "重新对准人物")}
-						</button>
 
 						<h3 className="move-head">{ko("Move keys", "움직임 키", "移动关键帧")}</h3>
-						<div className="move-ab">
-							<button
-								type="button"
-								className={"btn ghost" + (recState === "recording" ? " rec-live" : "")}
-								disabled={!hasCameraKeys && !motion}
-								title={ko("Play the piece in PlayView and save it as a video file — camera move and character motion, no editor chrome", "재생 보기에서 장면을 재생하고 영상 파일로 저장합니다. 카메라 움직임과 캐릭터 모션만 담고 편집 UI는 제외됩니다", "在 PlayView 里播放并存成视频 — 只含相机运动和人物动作，不含编辑界面")}
-								onClick={toggleShotRecording}
-							>
-								{recState === "recording" ? ko("■ Stop rec", "■ 녹화 정지", "■ 停止录制") : ko("● Record", "● 녹화", "● 录制")}
-							</button>
-						</div>
+
 						{moveSequence ? (
 							<div className="move-slate" title={ko("derived from the keyframings, not chosen from a list", "목록에서 고른 값이 아니라 키프레임에서 계산된 움직임입니다", "由关键帧算出，不是从列表里选的")}>
 								{moveSequence.displaySlate} · {moveSequence.spanS}{ko("s", "초", "s")}
@@ -11229,11 +11476,9 @@ function resizePromptClip(id, edge, rawFrame) {
 						</Field>
 					</Foldout>
 
-				<Foldout hidden={!isCharacterSelection} title={ko("Part colours", "부위 색상", "部位颜色")}>
-					<label className="check snap-toggle"><input type="checkbox" checked={partColoursEnabled} onChange={(e) => setPartColoursEnabled(e.target.checked)} /> {ko("Render body parts by colour", "신체 부위를 색상으로 렌더링", "按颜色渲染身体部位")}</label>
-					{partColoursEnabled && <div className="move-ab"><button type="button" className={"btn ghost" + (partColoursMode === "shaded" ? " primary" : "")} onClick={() => setPartColoursMode("shaded")}>{ko("Shaded", "음영", "着色")}</button><button type="button" className={"btn ghost" + (partColoursMode === "flat" ? " primary" : "")} onClick={() => setPartColoursMode("flat")}>{ko("Flat", "평면", "平面")}</button></div>}
-				</Foldout>
+
 				<Foldout hidden={!isCharacterSelection} title={showB ? ko("Subjects", "인물들", "人物") : ko("Subject", "인물", "人物")}>
+
 						<div className={"subjects-row" + (showB ? "" : " single")}>
 							{characters.map((entry, index) => entry.hidden ? null : (
 								<SubjectBox
@@ -11260,26 +11505,58 @@ function resizePromptClip(id, edge, rawFrame) {
 						)}
 					</Foldout>
 
-				<Foldout hidden={!isCharacterSelection} title={ko("Transform", "변환", "变换")}>
-					<p className="inspector-hint">
-						{ko("Edit the selected subject's placement, turn and size. Drag the Transform tool in the viewport for direct manipulation.", "선택한 인물의 위치·회전·크기를 편집합니다. 뷰포트의 변환 도구를 드래그해 바로 조작할 수도 있어요.", "编辑选中人物的位置、朝向和大小。也可以在视口里拖变换工具直接操作。")}
-					</p>
-					<Vector3Row
-						label={ko("Position", "위치", "位置")}
-						fields={[
-							{ axis: "X", value: activeChar.x, step: 0.05, precision: 2, scrubRange: 5, onChange: (x) => updateCharacterAt(activeCharIndex, { x }) },
-							{ axis: "Y", value: activeChar.y ?? 0, step: 0.05, precision: 2, scrubRange: 5, onChange: (y) => updateCharacterAt(activeCharIndex, { y: Math.max(0, y) }) },
-							{ axis: "Z", value: activeChar.z, step: 0.05, precision: 2, scrubRange: 5, onChange: (z) => updateCharacterAt(activeCharIndex, { z }) },
-						]}
-					/>
-					<Slider compact label={ko("Rotation", "회전", "旋转")} min={-180} max={180} step={1} value={activeChar.rot ?? 0} unit="°" onChange={(rot) => updateCharacterAt(activeCharIndex, { rot })} />
-					<Slider compact label={ko("Scale", "크기", "缩放")} min={0.2} max={3} step={0.05} value={activeChar.scale ?? 1} unit="×" onChange={(scale) => updateCharacterAt(activeCharIndex, { scale })} />
+
+				{/* Scene mode: the viewport gizmo and Move/Rotate/Scale are the primary
+				    path, so the numeric form starts folded (R5). Motion mode hides
+				    those tools, so the same foldout becomes the open Placement row —
+				    where the body stands on stage, which is all Motion can restage.
+				    Foldout reads defaultOpen once, so the key remounts it per mode. */}
+				<Foldout
+					key={workflowMode === "motion" ? "placement" : "transform"}
+					hidden={!isCharacterSelection}
+					defaultOpen={workflowMode === "motion"}
+					title={workflowMode === "motion" ? ko("Placement", "배치", "摆位") : ko("Transform", "변환", "变换")}
+				>
+					{workflowMode === "motion" ? (
+						<div className="placement-fields">
+							<p className="inspector-hint">
+								{ko("Stage position — does not change the take", "무대 위치 — 테이크는 바꾸지 않습니다", "舞台位置 — 不改这条镜头")}
+							</p>
+							<Vector3Row
+								label={ko("Position", "위치", "位置")}
+								fields={[
+									{ axis: "X", value: activeChar.x, step: 0.05, precision: 2, scrubRange: 5, onChange: (x) => updateCharacterAt(activeCharIndex, { x }) },
+									{ axis: "Z", value: activeChar.z, step: 0.05, precision: 2, scrubRange: 5, onChange: (z) => updateCharacterAt(activeCharIndex, { z }) },
+								]}
+							/>
+							<Slider compact label={ko("Rotation", "회전", "旋转")} min={-180} max={180} step={1} value={activeChar.rot ?? 0} unit="°" onChange={(rot) => updateCharacterAt(activeCharIndex, { rot })} />
+						</div>
+					) : (
+						<>
+							<p className="inspector-hint">
+								{ko("Edit the selected subject's placement, turn and size. Drag the Transform tool in the viewport for direct manipulation.", "선택한 인물의 위치·회전·크기를 편집합니다. 뷰포트의 변환 도구를 드래그해 바로 조작할 수도 있어요.", "编辑选中人物的位置、朝向和大小。也可以在视口里拖变换工具直接操作。")}
+							</p>
+							<Vector3Row
+								label={ko("Position", "위치", "位置")}
+								fields={[
+									{ axis: "X", value: activeChar.x, step: 0.05, precision: 2, scrubRange: 5, onChange: (x) => updateCharacterAt(activeCharIndex, { x }) },
+									{ axis: "Y", value: activeChar.y ?? 0, step: 0.05, precision: 2, scrubRange: 5, onChange: (y) => updateCharacterAt(activeCharIndex, { y: Math.max(0, y) }) },
+									{ axis: "Z", value: activeChar.z, step: 0.05, precision: 2, scrubRange: 5, onChange: (z) => updateCharacterAt(activeCharIndex, { z }) },
+								]}
+							/>
+							<Slider compact label={ko("Rotation", "회전", "旋转")} min={-180} max={180} step={1} value={activeChar.rot ?? 0} unit="°" onChange={(rot) => updateCharacterAt(activeCharIndex, { rot })} />
+							<Slider compact label={ko("Scale", "크기", "缩放")} min={0.2} max={3} step={0.05} value={activeChar.scale ?? 1} unit="×" onChange={(scale) => updateCharacterAt(activeCharIndex, { scale })} />
+						</>
+					)}
+
 				</Foldout>
 
 				{/* Rig and Pose are chosen once when a character is cast and then left
 				    alone, so they open on demand — Subject and Prompt are the panels
 				    you actually work in. */}
-				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} title={ko("Rig", "리그", "绑定")}>
+
+				<Foldout hidden={!isCharacterSelection} defaultOpen={false} title={ko("Rig", "리그", "绑定")}>
+
 					{/* The rig is a property of the character, and swapping it is a
 					    look decision made while blocking — so it belongs beside the
 					    subject, not buried in the project file. */}
@@ -11305,7 +11582,9 @@ function resizePromptClip(id, edge, rawFrame) {
 					</div>
 				</Foldout>
 
-				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} title={ko("Pose", "포즈", "姿势")}>
+
+				<Foldout hidden={!isCharacterSelection} defaultOpen={false} title={ko("Pose", "포즈", "姿势")}>
+
 					{/* Tiles, not a dropdown: a pose read out of a photograph has no
 					    name worth reading — it is recognisable only as a shape. This
 					    is the same grid the studio shows, applied to whichever
@@ -11375,7 +11654,9 @@ function resizePromptClip(id, edge, rawFrame) {
 					/>
 				</Foldout>
 
-				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} title={ko("Video capture", "영상 모캡", "影像动捕")}>
+
+				<Foldout hidden={!isCharacterSelection} defaultOpen={false} title={ko("Video capture", "영상 모캡", "影像动捕")}>
+
 					<div className="multimodel-card">
 						<div className="multimodel-card-head">
 							<div>
@@ -11493,14 +11774,22 @@ function resizePromptClip(id, edge, rawFrame) {
 								)}
 								{multiModelExtract === "error" && <p className="multimodel-error">{multiModelExtractError}</p>}
 								{multiModelTake && (
-									<p className="multimodel-extract-receipt">
-										{multiModelTake.gpu
-											? (ko(`GPU take extracted, ${multiModelTake.frames} frames — press play on the timeline`, `GPU 테이크 ${multiModelTake.frames}프레임 추출됨 — 타임라인에서 재생하세요`, `GPU 镜头已提取，${multiModelTake.frames} 帧 — 在时间线上播放`))
-											: (ko(`Baked a ${multiModelTake.frames}-frame take (${multiModelTake.fitted} measured · ${multiModelTake.held} held) — press play on the timeline`, `${multiModelTake.frames}프레임 테이크 구움 (실측 ${multiModelTake.fitted} · 유지 ${multiModelTake.held}) — 타임라인에서 재생하세요`, `已烘焙 ${multiModelTake.frames} 帧镜头（实测 ${multiModelTake.fitted} · 保持 ${multiModelTake.held}）— 在时间线上播放`))}
+
+					<p className="multimodel-extract-receipt">
+						{multiModelTake.gpu
+							? ko(`GVHMR take extracted, ${multiModelTake.frames} frames — press play on the timeline`, `GVHMR 테이크 ${multiModelTake.frames}프레임 추출됨 — 타임라인에서 재생하세요`, `GVHMR 镜头已提取，${multiModelTake.frames} 帧 — 在时间线上播放`)
+							: ko(`Baked a ${multiModelTake.frames}-frame take (${multiModelTake.fitted} measured · ${multiModelTake.held} held) — press play on the timeline`, `${multiModelTake.frames}프레임 테이크 구움 (실측 ${multiModelTake.fitted} · 유지 ${multiModelTake.held}) — 타임라인에서 재생하세요`, `已烘焙 ${multiModelTake.frames} 帧镜头（实测 ${multiModelTake.fitted} · 保持 ${multiModelTake.held}）— 在时间线上播放`)}
 									</p>
 								)}
 								{multiModelTake?.trajectory && <p className="multimodel-note" data-testid="trajectory-receipt">{trajectoryReceipt(multiModelTake.trajectory, LOCALE)}</p>}
+								{multiModelTake?.segmentation && <p className="multimodel-note" data-testid="segmentation-receipt">{segmentationReceipt(multiModelTake.segmentation, LOCALE)}</p>}
+								{multiModelTake?.quality && <p className="multimodel-note" data-testid="mocap-quality-receipt">
+									{multiModelTake.quality.pass
+										? ko("Mocap quality gate passed", "모캡 품질 게이트 통과", "动捕质量门通过")
+										: ko(`Mocap quality warning: ${multiModelTake.quality.checks?.filter((check) => !check.pass).map((check) => check.name).join(", ") || "review required"}`, `모캡 품질 게이트 경고: ${multiModelTake.quality.checks?.filter((check) => !check.pass).map((check) => check.name).join(", ") || "확인 필요"}`, `动捕质量警告：${multiModelTake.quality.checks?.filter((check) => !check.pass).map((check) => check.name).join("、") || "需要检查"}`)}
+								</p>}
 								{multiModelTake?.gpu && Math.abs(activeChar.y ?? 0) > .001 && <p className="multimodel-note" data-testid="trajectory-stage-offset">{ko(`Scene height ${(activeChar.y * 100).toFixed(1)}cm is added to the motion (Subject → Y)`, `씬 높이 ${(activeChar.y * 100).toFixed(1)}cm가 모션에 추가돼요 (Subject → Y)`, `场景高度 ${(activeChar.y * 100).toFixed(1)}cm 会加到动作上（Subject → Y）`)}</p>}
+
 								{multiModelTake?.persons > 1 && (
 									<p className="multimodel-extract-receipt">
 										{ko(`${multiModelTake.persons} performers landed on their own subject layers`, `${multiModelTake.persons}명의 테이크를 각 인물 레이어에 배치했어요`, `已把 ${multiModelTake.persons} 个表演者放到各自人物层`)}
@@ -11508,11 +11797,19 @@ function resizePromptClip(id, edge, rawFrame) {
 								)}
 								{multiModelExtract === "idle" && !multiModelTake && (
 									<p className="multimodel-note">
-										{bridge === null
-											? ko("Checking for the dev bridge…", "개발 브리지를 확인하는 중…", "正在检查开发桥接…")
-											: bridge.ok
-												? ko("Extraction runs on the GPU box (about a minute per 15 s of footage).", "추출은 GPU 박스에서 돌아갑니다(영상 15초당 약 1분).", "提取在 GPU 机器上跑（大约每 15 s 素材 1 分钟）。")
-												: ko("No bridge: extraction runs in this browser (rougher). First run downloads the pose engine (~15 MB).", "브리지 없음: 이 브라우저에서 추출합니다(품질 낮음). 첫 실행은 포즈 엔진(~15 MB)을 내려받습니다.", "没有桥接：在这个浏览器里提取（更糙）。首次会下载姿势引擎（约 15 MB）。")}
+
+						{bridge === null
+							? ko("Checking for the dev bridge…", "개발 브리지를 확인하는 중…", "正在检查开发桥接…")
+							: bridge.ok && bridge.extractionBackend === "gvhmr"
+								? ko(
+									"GVHMR extraction runs on the GPU box (about a minute per 15 s of footage).",
+									"GVHMR 추출은 GPU 박스에서 돌아갑니다(영상 15초당 약 1분)."
+								, "GVHMR 提取在 GPU 机器上跑（大约每 15 秒素材 1 分钟）。")
+								: ko(
+									"GVHMR extraction is unavailable until the local GPU bridge is connected.",
+									"로컬 GPU 브리지가 연결될 때까지 GVHMR 추출을 사용할 수 없어요."
+								, "连上本地 GPU 桥之前无法使用 GVHMR 提取。")}
+
 									</p>
 								)}
 							</div>
@@ -11709,8 +12006,10 @@ function resizePromptClip(id, edge, rawFrame) {
 						</>
 					)}
 				</Foldout>}
-				<Foldout hidden={!advancedMode || !isCharacterSelection} defaultOpen={false} openSignal={promptBlocksReveal} title={ko("Prompt Blocks", "프롬프트 블록", "提示词块")}>
+
+				<Foldout hidden={!isCharacterSelection} defaultOpen={false} openSignal={promptBlocksReveal} title={ko("Prompt Blocks", "프롬프트 블록", "提示词块")}>
 					<p className="inspector-hint">{ko("Blocks define what ARDY generates over each frame range. Selecting one also moves editing context to that prompt.", "블록은 각 프레임 범위에서 ARDY가 생성할 내용을 정합니다. 블록을 선택하면 편집 기준도 해당 프롬프트로 이동합니다.", "块决定 ARDY 在每段帧范围内生成什么。选中一块，编辑也会切到对应提示词。")}</p>
+
 						<div className="inspector-list">
 							{promptClips.map((clip) => (
 								<button
@@ -11948,6 +12247,11 @@ function resizePromptClip(id, edge, rawFrame) {
 								)}
 							</Field>
 						)}
+						{/* Nothing to generate yet is not a disabled button: with no blocks
+						    the panel's own "Add block at frame N" and its hint already say
+						    what comes next, so the action stays absent until there is at
+						    least one block to run (docs/studio-ui-ia.md R3). */}
+						{promptClips.length >= 1 && (
 						<button
 							type="button"
 							className="btn primary full generate prompt-block-generate"
@@ -11963,6 +12267,7 @@ function resizePromptClip(id, edge, rawFrame) {
 								? ko("Queue block generation", "블록 생성 대기열에 추가", "加入块生成队列")
 								: ko(`Generate all ${promptClips.length} blocks`, `${promptClips.length}개 블록 모두 생성`, `生成全部 ${promptClips.length} 个块`)}
 						</button>
+						)}
 						{ardyRunning && (
 							<button type="button" className="btn ghost full" onClick={cancelArdy}>
 								{ko("Cancel run", "실행 취소", "取消运行")}
@@ -11975,7 +12280,9 @@ function resizePromptClip(id, edge, rawFrame) {
 						</button>
 					</Foldout>
 
-					<Foldout hidden={!advancedMode || !isRigSelection} title={ko("Rig Control", "리그 제어", "绑定控制")}>
+
+					<Foldout hidden={!isRigSelection} title={ko("Rig Control", "리그 제어", "绑定控制")}>
+
 						<p className="inspector-hint">
 							{rigSelection && rigSelection.token !== "rig"
 							? ko(`${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]} is the active control group.`, `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]}이 활성 제어 그룹입니다.`, `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]} 是当前控制组。`)
@@ -12087,7 +12394,9 @@ function resizePromptClip(id, edge, rawFrame) {
 						)}
 					</Foldout>
 
-				<Foldout hidden={!advancedMode || selectedHierarchyId !== "environment"} title={ko("Environment", "환경", "环境")}>
+
+				<Foldout hidden={selectedHierarchyId !== "environment"} title={ko("Environment", "환경", "环境")}>
+
 						<label className="check">
 							<input type="checkbox" checked={hasEnvSheet} onChange={(event) => setHasEnvSheet(event.target.checked)} />
 						<span>{ko("I have an environment sheet", "환경 시트가 있어요", "我有环境设定图")}</span>
@@ -12114,7 +12423,9 @@ function resizePromptClip(id, edge, rawFrame) {
 						/>
 					</Foldout>
 
-				<Foldout hidden={!advancedMode || selectedHierarchyId !== "props"} title={ko("Props", "소품", "道具")}>
+
+				<Foldout hidden={selectedHierarchyId !== "props"} title={ko("Props", "소품", "道具")}>
+
 					<div className="props-drop" data-drop={inspectorDrop.over ? "over" : "target"} {...inspectorDrop.handlers}>
 					<p className="inspector-hint">{ko("Everything you add to the set lives here. Pick one to edit it, or click it in the shot view. Drop a picture anywhere here — or on the shot view — to stand it up as a cutout.", "세트에 추가한 모든 소품이 여기에 모입니다. 편집하려면 하나를 고르거나 샷 뷰에서 클릭하세요. 사진을 이 영역이나 샷 뷰에 끌어다 놓으면 컷아웃으로 세워집니다.", "场地里加的东西都在这里。点一项来编辑，或在镜头视图里点它。把照片拖到这里或镜头视图，就会立成立牌。")}</p>
 					<AddObjectMenu onAdd={addSceneObject} label={ko("Add object to the set", "세트에 오브젝트 추가", "往场地添加物体")} />
@@ -12691,6 +13002,13 @@ function resizePromptClip(id, edge, rawFrame) {
 						/>
 					)}
 				</aside>
+				{!embedMode && (
+					<AgentPanel
+						sceneName={scenes.find((entry) => entry.id === activeSceneId)?.name ?? ko("Untitled Scene", "제목 없는 씬", "未命名场景")}
+						defaultCollapsed
+						onCollapsedChange={setAgentCollapsed}
+					/>
+				)}
 			</div>
 
 			<div
@@ -12917,11 +13235,11 @@ function resizePromptClip(id, edge, rawFrame) {
 					frameCount={tlFrameCount}
 					fps={tlFps}
 					playbackSpeed={DEFAULT_PLAYBACK_SPEED}
-					advancedMode={advancedMode}
 				trackOwner={characters.length > 1 ? `S${activeCharIndex + 1}` : null}
 				ghostLayers={ghostLayers}
 				pathSpeed={pathSpeed}
 				playing={tlPlaying}
+				workflowMode={workflowMode}
 				waypointMode={waypointMode}
 				waypoints={waypoints}
 				pathSpeed={pathSpeed}
@@ -13025,6 +13343,7 @@ function resizePromptClip(id, edge, rawFrame) {
 				onPromptRemove={removePromptClip}
 				onCameraMoveSelect={() => {
 					setSelectedHierarchyId("camera");
+					if (workflowMode !== "camera") selectWorkflowMode("camera");
 				}}
 				onCameraKeyframeAdd={addCameraKeyframe}
 				onCameraKeyframeMove={moveCameraKeyframe}
@@ -13034,6 +13353,7 @@ function resizePromptClip(id, edge, rawFrame) {
 						if (!selected) throw new Error(`Unknown shots ID: ${shotId}`);
 						setTlFrame(selected.startFrame);
 						setSelectedHierarchyId("camera");
+						if (workflowMode !== "camera") selectWorkflowMode("camera");
 					}}
 					onCameraBlockChange={(patch, shotId) => {
 						if (patch.mode === "follow") syncActiveCameraFraming();
@@ -13105,6 +13425,11 @@ function resizePromptClip(id, edge, rawFrame) {
 					onOpenFile={() => {
 						setProjectBrowserOpen(false);
 						openProject();
+					}}
+					starters={STARTER_SCENES}
+					onStarter={(id) => {
+						setProjectBrowserOpen(false);
+						void openStarterScene(id);
 					}}
 					onNew={() => {
 						setProjectBrowserOpen(false);

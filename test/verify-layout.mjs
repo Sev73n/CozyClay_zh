@@ -10,14 +10,23 @@ function expect(name, condition) {
 // The studio source spans App.jsx and app-stage.jsx (module-level extraction); pin against both.
 const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8");
+const extract = readFileSync(new URL("../tools/ardy/extract.mjs", import.meta.url), "utf8");
+const bridge = readFileSync(new URL("../tools/ardy/bridge.mjs", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const planview = readFileSync(new URL("../src/planview.jsx", import.meta.url), "utf8");
 const timeline = readFileSync(new URL("../src/ardy/timeline.jsx", import.meta.url), "utf8");
 const dualview = readFileSync(new URL("../src/dualview.jsx", import.meta.url), "utf8");
 const offscreenExport = readFileSync(new URL("../src/offscreen-export.js", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/ui.jsx", import.meta.url), "utf8");
+const workflowBuilder = readFileSync(new URL("../src/workflow/WorkflowBuilder.jsx", import.meta.url), "utf8");
+const agentClient = readFileSync(new URL("../src/workflow/agent-client.js", import.meta.url), "utf8");
 
 expect("workspace layout persists across reloads", app.includes("WORKSPACE_LAYOUT_KEY") && app.includes("localStorage.setItem"));
+expect("H3 lock evidence is visible on successful video takes", workflowBuilder.includes('data-testid="h3-preservation-receipt"') && workflowBuilder.includes("H3 scene/camera lock verified"));
+expect("H3 drift evidence is visible when a take is rejected", workflowBuilder.includes('data-testid="h3-preservation-failed"') && workflowBuilder.includes("H3 output rejected: background/camera drift"));
+expect("failed H3 takes cannot leave a stale video preview visible", workflowBuilder.includes("videoUrl: null, resultUrl: null, outputs: [], preservation: error?.preservation || null"));
+expect("failed H3 outputs stay cleared in the returned workflow graph", workflowBuilder.includes('hasPatchedOutputs') && workflowBuilder.includes('Object.prototype.hasOwnProperty.call(patch, "outputs")'));
+expect("video requests preserve structured H3 rejection metrics", agentClient.includes("error.preservation = detail.preservation") && agentClient.includes("error.status = response.status"));
 expect("sidebar width has a pointer resize path", app.includes('beginWorkspaceResize("sidebar"'));
 expect("frame monitor height has a pointer resize path", app.includes('beginWorkspaceResize("timeline"'));
 expect("inset view has a diagonal resize path", app.includes("beginInsetResize") && app.includes("vp-inset-resize"));
@@ -33,9 +42,47 @@ expect("plan zoom persists with the workspace layout", app.includes("planZoom: 1
 expect("zoom shrinks the ortho extent, not the pane", dualview.includes("planZoom = 1") && dualview.includes("PLAN_EXTENT / Math.max(0.25, planZoom)"));
 expect("demand loop wakes on mount and model commit", dualview.includes("requestAnimationFrame(() => requestAnimationFrame(invalidate))") && app.includes("const frame = requestAnimationFrame(invalidate);"));
 expect("double-click no longer swaps Scene and Top-View", !app.includes('setViewMode((current) => (current === "plan" ? "shot" : "plan"))'));
+
 expect("Scene toolbar exposes shot preset, aspect, FOV, recenter, and Top-View controls", app.includes("viewport-toolbar-field shot-field") && app.includes("SHOT_ASPECT_PRESETS") && app.includes("viewport-fov-control") && app.includes("Recenter on subject") && app.includes('ko("Top", "탑"'));
-expect("Scene and PlayView tools share one horizontal title bar", app.includes('className="viewport-titlebar"') && css.includes(".viewport-titlebar") && css.includes("position: static"));
-expect("PlayView toolbar exposes framing readouts, playback, and recording", app.includes("editor-toolbar play-tools") && app.includes("shotOutput.label") && app.includes("toggleShotRecording"));
+// #193 (R1): the viewport camera bar is the ONLY home for lens and recentring.
+// The camera inspector used to carry a second copy of both.
+expect(
+	"lens and recentring live once, in the viewport camera bar",
+	app.includes('aria-label={ko("Recenter on subject", "피사체 다시 맞추기"') &&
+	!app.includes('ko("Lens (FOV)", "렌즈 (FOV)")') &&
+	!app.includes('<button className="btn ghost" onClick={() => setNonce((n) => n + 1)}>'),
+);
+// #195: the title bar is one horizontal strip — mode tabs plus the scene
+// tools, rendered unconditionally. The Scene/PlayView centre tabs are gone.
+expect(
+	"the viewport title bar is one horizontal strip without centre tabs",
+	app.includes('className="viewport-titlebar"') &&
+	css.includes(".viewport-titlebar") &&
+	css.includes("position: static") &&
+	app.includes('className="editor-toolbar scene-tools"') &&
+	!app.includes('className="pane-tabs"') &&
+	!css.includes(".pane-tabs"),
+);
+// #193 emptied the PlayView bar down to two readouts; #195 removed the bar
+// itself along with the tab that reached it — the framed player is an internal
+// preview state now, and it carries no toolbar at all.
+expect(
+	"the PlayView toolbar is gone, markup and styles alike",
+	!app.includes("editor-toolbar play-tools") &&
+	!css.includes(".editor-toolbar.play-tools") &&
+	!app.includes("toggleShotRecording") &&
+	!app.includes("viewport-readout") &&
+	!css.includes(".viewport-readout"),
+);
+expect(
+	"one topbar Export menu leads with the keyframe pack",
+	app.includes('data-testid="topbar-export"') &&
+	app.includes('id="export-menu-trigger"') &&
+	app.includes('className="export-menu-primary"') &&
+	app.includes('data-testid="export-video"') &&
+	app.includes('data-testid="export-otio"'),
+);
+
 // Letterbox bars are editor chrome. Painting them with the scene background
 // put a sheet of near-white either side of the frame the moment a narrower
 // aspect was picked; they wear the editor's own tone now, and the scene draw
@@ -84,7 +131,9 @@ expect(
 	"recording captures the clean render without a frame stamp",
 	app.includes("capture: applyExportFrame") &&
 		!app.includes("burnInCapture") &&
-		app.includes("sampleAt(playbackScene, shotAtFrame(shots, frame), frame)"),
+		// #193: the preflight can commit a framing key the render closure has not
+		// seen yet, so the export samples the list the ref carries when set.
+		app.includes("sampleAt(playbackScene, shotAtFrame(exportShotsRef.current ?? shots, frame), frame)"),
 );
 expect(
 	"recording uses current motion content instead of a stale timeline tail",
@@ -200,7 +249,7 @@ expect(
 	app.includes('ko("Waiting for the ARDY bridge — it reconnects automatically"') &&
 	app.includes('ko("Add a prompt block and describe its motion first"'),
 );
-expect("generated motion anchors frame zero at the active character", app.includes("anchorX: activeChar.x") && app.includes("anchorZ: activeChar.z") && app.includes("anchorFrame: 0"));
+expect("generated motion anchors frame zero at the target character", app.includes("anchorX: targetCharacter.x") && app.includes("anchorZ: targetCharacter.z") && app.includes("anchorFrame: 0"));
 expect("returned playback has no CozyClay root coordinate warp", !app.includes("warpMotionRootToPath"));
 expect("Top-View root path draws from Subject 1 without a duplicate marker", planview.includes("[{ x: start.x, z: start.z }, ...waypoints]") && planview.includes("waypoints.map((w, i)"));
 expect(
@@ -239,13 +288,30 @@ expect(
 // scrub, viewport gizmo) agree on max(0, y).
 expect(
 	"Subject transforms have one inspector home with the direct tools",
-	app.includes('<Foldout hidden={!isCharacterSelection} title={ko("Transform", "변환"') &&
+
+	app.includes('ko("Placement", "배치"') && app.includes('ko("Transform", "변환"') &&
+
 	app.includes('{ axis: "X", value: activeChar.x, step: 0.05') &&
 	app.includes('{ axis: "Y", value: activeChar.y ?? 0, step: 0.05') &&
 	app.includes('{ axis: "Z", value: activeChar.z, step: 0.05') &&
 	app.includes('label={ko("Rotation", "회전"') &&
 	app.includes('label={ko("Scale", "크기"') &&
 	app.includes('data-transform-controls'),
+);
+// Motion mode hides Move/Rotate/Scale, so the same foldout becomes the open
+// Placement row (stage X/Z + turn) and Scene mode folds the full form away
+// behind the gizmo (#194). Foldout reads defaultOpen once, hence the key.
+expect(
+	"the character transform is mode-aware",
+	app.includes('key={workflowMode === "motion" ? "placement" : "transform"}') &&
+	app.includes('defaultOpen={workflowMode === "motion"}') &&
+	app.includes('ko("Stage position — does not change the take", "무대 위치 — 테이크는 바꾸지 않습니다"'),
+);
+// Entering Motion selects the active character's ROW: the placement gizmo only
+// renders for a specific cast member, never for the group.
+expect(
+	"Motion mode lands on a character the gizmo can draw",
+	app.includes("setSelectedHierarchyId(rowIdForCharIndex(activeCharIndex));"),
 );
 expect(
 	"the character gizmo no longer caps lift at 4 m",
@@ -268,13 +334,14 @@ expect("resize handles opt out on compact layouts", css.includes(".workspace-spl
 // place — each of them was a bug in the two-character prototype.
 expect(
 	"a character owns a Video capture foldout without a legacy ARDY card",
-	app.includes('hidden={!advancedMode || !isCharacterSelection}') &&
+
 	app.includes('title={ko("Video capture", "영상 모캡"') &&
-	!app.includes('title={ko("ARDY motion", "ARDY 모션"'),
+	!app.includes('title={ko("ARDY motion", "ARDY 모션")}'),
+
 );
 expect(
 	"the Studio has no Advanced mode toggle",
-	app.includes("const advancedMode = true;") && !app.includes("advanced-toggle") && !app.includes("cozyclay.advanced"),
+	!app.includes("advanced-toggle") && !app.includes("cozyclay.advanced"),
 );
 expect(
 	"the Studio topbar returns to Workflow",
@@ -282,21 +349,29 @@ expect(
 );
 expect(
 	"expert foldouts stay enabled in the always-advanced Studio",
-	app.includes('hidden={!advancedMode || !isCharacterSelection}') && app.includes("const advancedMode = true;"),
+	app.includes('hidden={!isCharacterSelection}'),
 );
 expect(
-	"ingest and extraction reach the ported core modules",
+	"ingest and extraction reach the ported ingest module",
 	app.includes('from "./multimodel-ingest.js"') &&
-	app.includes('from "./pose-extract/index.js"') &&
 	app.includes("probeFootage(objectUrl") &&
 	app.includes("knownFps: Number.isFinite(source.fps) ? source.fps : null"),
 );
 expect(
-	"extraction routes to the GPU box when the bridge is up and the browser otherwise",
-	app.includes("if (bridge?.ok) return extractMultiModelMotionGpu();") &&
-	app.includes("return extractMultiModelMotionBrowser();") &&
-	app.includes("requestBridgeExtract(") &&
-	app.includes("createPoseDetector()"),
+	"extraction requires a GVHMR bridge and rejects every other route",
+	app.includes('MULTIMODEL_REASONS["extract-bridge-required"]') &&
+	app.includes('bridge.extractionBackend !== "gvhmr"') &&
+	app.includes('MULTIMODEL_REASONS["extract-backend-unsupported"]') &&
+	app.includes("return extractMultiModelMotionGpu();") &&
+	!app.includes("return extractMultiModelMotionBrowser();") &&
+	app.includes("requestBridgeExtract("),
+);
+expect(
+	"the bridge advertises GVHMR as the only extraction backend",
+	extract.includes('|| "gvhmr").toLowerCase()') &&
+	extract.includes('EXTRACT_BACKEND_SUPPORTED = EXTRACT_BACKEND === "gvhmr" && !EXTRACT_CMD') &&
+	extract.includes('reason: "extract-backend-unsupported"') &&
+	/extractionBackend:\s*EXTRACT_BACKEND_SUPPORTED\s*\?\s*EXTRACT_BACKEND\s*:\s*"unsupported"/.test(bridge),
 );
 expect("every named ingest failure is a message in both locales", app.includes("const MULTIMODEL_REASONS = {") && app.includes("pick(MULTIMODEL_REASONS[code]) ?? code"));
 // THE INVARIANT: extraction divided root travel by the filmed person's
@@ -345,17 +420,35 @@ expect(
 	app.includes("ikStateRef.current.keys.clear();"),
 );
 expect(
-	"a browser-baked take is trimmable too",
-	app.indexOf("motionFullRef.current.set(activeChar.id, loaded);") > 0 &&
-	(app.match(/motionFullRef\.current\.set\(/g) ?? []).length >= 4,
+	"an extracted take is trimmable too",
+	app.indexOf("motionFullRef.current.set(targetCharacter.id, loaded);") > 0 &&
+	(app.match(/motionFullRef\.current\.set\(/g) ?? []).length >= 3,
 );
 expect(
-	"the timeline receives the active take and both trim handlers",
+	"the timeline receives the active take, both trim handlers, and the department it draws for",
 	app.includes("onMotionTrim={applyMotionTrim}") &&
 	app.includes("onMotionTrimReset={resetMotionTrim}") &&
 	app.includes("motion={motion ? {") &&
 	app.includes("frames: motion.frames,") &&
-	app.includes("segments: motionEditLayout("),
+	app.includes("segments: motionEditLayout(") &&
+	app.includes("workflowMode={workflowMode}"),
+);
+// Trim, retime and Cut edit the take: Scene and Camera never draw them, and
+// inside Motion they belong to the segment the playhead selects (#191).
+expect(
+	"take trim, retime and Cut render only in Motion mode on the selected segment",
+	timeline.includes('const motionTools = workflowMode === "motion";') &&
+	timeline.includes("segmentTools = (segment) => motionTools && (segment.preview === true || selectedMotionSegment?.id === segment.id)") &&
+	timeline.includes("segmentTools(segment) && <button") &&
+	timeline.includes("name === IK_LANE && motion && motionTools && selectedMotionSegment && ("),
+);
+// Foot snap and Body contact only reinterpret an IK drag (R7).
+expect(
+	"foot snap and body contact stay under IK, as two independent toggles",
+	timeline.includes("{ikMode && (<>") &&
+	timeline.includes('"tl-btn ik snap"') &&
+	timeline.includes('"tl-btn ik contact"') &&
+	timeline.includes('ko("Load a rig to edit poses"'),
 );
 expect("a deleted character takes its full take with it", app.includes("motionFullRef.current.delete(charId);"));
 

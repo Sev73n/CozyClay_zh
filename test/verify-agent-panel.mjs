@@ -5,11 +5,14 @@
 // red: where the panel is mounted, the width contract, the no-token rule, and
 // the presence of every state the issue enumerates.
 import { readFileSync } from "node:fs";
+import assert from "node:assert/strict";
 
 const panel = readFileSync(new URL("../src/workflow/AgentPanel.jsx", import.meta.url), "utf8");
 const client = readFileSync(new URL("../src/workflow/agent-client.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/workflow/agent-panel.css", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../src/workflow/WorkflowBuilder.jsx", import.meta.url), "utf8");
+const studio = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const studioCss = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -33,6 +36,27 @@ expect("the panel lives inside .workflow-main", (() => {
 })());
 expect("the top bar carries a panel toggle", builder.includes("workflow-agent-toggle") && builder.includes("cozyclay:agent-panel-toggle"));
 expect("AgentPanel imports its own stylesheet", panel.includes('import "./agent-panel.css"'));
+
+// --- Studio mount -------------------------------------------------------
+// The studio has no room for another top bar button (IA rule R4): the panel is
+// shown from the View ▾ menu, exactly like every other "what is on screen"
+// toggle, and it boots collapsed so the studio still opens on the stage.
+expect("Studio imports the shared AgentPanel", studio.includes('import AgentPanel from "./workflow/AgentPanel.jsx"'));
+expect("Studio mounts AgentPanel beside the authoring workspace", studio.includes("<AgentPanel") && studio.includes("sceneName={scenes.find((entry) => entry.id === activeSceneId)?.name"));
+expect("Studio boots the panel collapsed and mirrors the flag", studio.includes("defaultCollapsed") && studio.includes("onCollapsedChange={setAgentCollapsed}") && studio.includes("useState(true)"));
+expect("AgentPanel accepts the host's default/notify pair", panel.includes("defaultCollapsed = false") && panel.includes("onCollapsedChange?.(collapsed)") && panel.includes("useState(defaultCollapsed)"));
+expect("Studio adds NO agent button to the top bar", !studio.includes("agent-topbar-toggle") && !/topbar-action[^"]*agent/i.test(studio));
+expect("the View menu owns the panel toggle", (() => {
+	const menu = studio.indexOf('<div className="view-menu-wrap">');
+	const item = studio.indexOf('"view-menu-item agent-panel-toggle"');
+	return menu !== -1 && item > menu && studio.includes('cozyclay:agent-panel-toggle');
+})(), "the toggle must sit inside the View ▾ menu");
+expect("the item is a checkbox that reflects the panel state", /role="menuitemcheckbox"\s*\n\s*className=\{"view-menu-item agent-panel-toggle"[^]*?aria-checked=\{!agentCollapsed\}[^]*?aria-pressed=\{!agentCollapsed\}/.test(studio));
+expect("the item is labelled Agent panel in both locales", studio.includes('ko("Agent panel", "에이전트 패널"'));
+expect("Studio tokens share the panel host scope", /\.workflow-app,\s*\.app\s*\{/.test(css));
+expect("the studio shows no collapsed rail — the mode budget stays as it was", /\.app \.agent-panel\.collapsed\s*\{[^}]*display:\s*none/.test(css));
+expect("the overlay drawer hangs from a host-sized token", /--agent-drawer-top:\s*58px/.test(css) && /\.app\s*\{\s*--agent-drawer-top:\s*48px;?\s*\}/.test(css) && !/[^-]top:\s*58px/.test(css));
+expect("embedded Studio hides the authoring panel", studioCss.includes('.app[data-embed-mode="playview"] .agent-panel'));
 
 // --- width contract -----------------------------------------------------
 expect("css defines the default width token as 360px", /--agent-width-default:\s*360px/.test(css));
@@ -117,6 +141,13 @@ expect("the scripted turn emits an image and a done event", client.includes('typ
 
 // --- behaviour of the pure helpers --------------------------------------
 const module_ = await import("../src/workflow/agent-client.js");
+const rejectedTransport = module_.createHttpTransport({ fetchImpl: async () => ({
+	ok: false,
+	status: 422,
+	clone: () => ({ json: async () => ({ error: "H3 preservation failed", preservation: { pass: false, worst: { p95Rgb: 44 } } }) }),
+}) });
+await assert.rejects(() => rejectedTransport.video({}), (error) => error.status === 422 && error.preservation?.worst?.p95Rgb === 44);
+expect("video transport keeps H3 rejection evidence for the node", true);
 expect("clampPanelWidth pins the floor", module_.clampPanelWidth(120) === 300);
 expect("clampPanelWidth pins the ceiling", module_.clampPanelWidth(9000) === 560);
 expect("clampPanelWidth keeps a legal width", module_.clampPanelWidth(412) === 412);

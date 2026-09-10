@@ -12,8 +12,13 @@ const NODE_FILES = [
 	"test/ardy/verify-fill.mjs",
 	"test/ardy/verify-fk.mjs",
 	"test/ardy/verify-gvhmr-worker.mjs",
+	"test/ardy/verify-mocap-quality-gate.mjs",
+	"test/ardy/verify-motion-calibration.mjs",
+	"test/ardy/verify-palette-segmentation.mjs",
+	"test/verify-motion-stabilize.mjs",
 	"test/ardy/verify-gvhmr-floor.mjs",
 	"test/verify-gvhmr-detector-flag.mjs",
+	"test/verify-gvhmr-only.mjs",
 	"test/ardy/verify-key-runs.mjs",
 	"test/ardy/verify-playback-skinning.mjs",
 	"test/ardy/verify-playback-clock.mjs",
@@ -23,6 +28,7 @@ const NODE_FILES = [
 	"test/ardy/verify-prompt-move.mjs",
 	"test/ardy/verify-rest.mjs",
 	"test/ardy/verify-root-drop.mjs",
+	"test/ardy/verify-surface-rise.mjs",
 	"test/ardy/verify-secure-artifacts.mjs",
 	"test/ardy/verify-timeline-coordinates.mjs",
 	"test/ardy/verify-timeline-resize.mjs",
@@ -62,6 +68,7 @@ const NODE_FILES = [
 	"test/verify-camera-follow.mjs",
 	"test/verify-camera-move.mjs",
 	"test/verify-camera-rail-schedule.mjs",
+	"test/verify-camera-tutorial.mjs",
 	"test/verify-codex-client.mjs",
 	"test/verify-cuts.mjs",
 	"test/verify-shot-guides.mjs",
@@ -167,6 +174,7 @@ const NODE_FILES = [
 ];
 
 const BROWSER_FILES = [
+	"test/verify-camera-mode-browser.mjs",
 	"test/verify-camera-rail-browser.mjs",
 	"test/verify-cutout-browser.mjs",
 	"test/verify-first-success-guide-browser.mjs",
@@ -177,15 +185,23 @@ const BROWSER_FILES = [
 	"test/verify-object-gizmo.mjs",
 	"test/verify-offscreen-export-browser.mjs",
 	"test/verify-project-menu-browser.mjs",
+	"test/verify-settings-menu-browser.mjs",
+	"test/verify-static-shot-export-browser.mjs",
+	"test/qa-agent-view-toggle-browser.mjs",
+	"test/qa-camera-tutorial-browser.mjs",
+	"test/qa-ia-tail-browser.mjs",
 	"test/qa-keyframe-pack-browser.mjs",
+	"test/qa-preview-browser.mjs",
 	"test/qa-reference-slots-browser.mjs",
+	"test/qa-scene-switcher-browser.mjs",
 	"test/qa-send-to-ai-browser.mjs",
+	"test/qa-view-menu-browser.mjs",
 ];
 
 // The inventory sweep only picks up `verify*.mjs`; a browser suite named for
 // the QA runner it needs is listed here so it still shows up in the manifest
 // (as an EXCLUDE with its reason) instead of going unmentioned.
-const EXTRA_INVENTORY = ["test/qa-keyframe-pack-browser.mjs", "test/qa-reference-slots-browser.mjs", "test/qa-send-to-ai-browser.mjs"];
+const EXTRA_INVENTORY = ["test/qa-agent-view-toggle-browser.mjs", "test/qa-camera-tutorial-browser.mjs", "test/qa-ia-tail-browser.mjs", "test/qa-keyframe-pack-browser.mjs", "test/qa-preview-browser.mjs", "test/qa-reference-slots-browser.mjs", "test/qa-scene-switcher-browser.mjs", "test/qa-send-to-ai-browser.mjs", "test/qa-view-menu-browser.mjs"];
 
 function verificationFiles(directory) {
 	return readdirSync(directory, { withFileTypes: true })

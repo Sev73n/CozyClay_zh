@@ -46,7 +46,9 @@ import {
 import ObjectGizmo from "./object-gizmo.jsx";
 import { MAX_PATH_POINTS } from "./object-path.js";
 import { track } from "./analytics.js";
-import { ko } from "./locale.js";
+import { ko, isKo } from "./locale.js";
+import { isPlaygroundEmbed, takePlaygroundProject } from "./playground.js";
+
 import { applyPartColours } from "./part-colours.js";
 import { POSE_BONES, applyHipsOffset, applyPose, primeBindPose, normalizeBoneName } from "./poses.js";
 import { FK_TRACKS, IK_TRACKS, MID_TRACKS } from "./ardy/ik.js";
@@ -776,14 +778,17 @@ export const MULTIMODEL_REASONS = {
 	"footage-timeout": ["The bridge download took too long and was stopped", "브리지 다운로드가 너무 오래 걸려 중단됐어요", "桥下载太久，已中止"],
 	"bridge-extract-incomplete": ["The bridge stream ended without a take", "브리지 전송이 테이크 없이 끝났어요", "桥接传输结束时没有一条镜头"],
 	"extract-host-missing": ["The bridge has no GPU box configured (CCLAY_EXTRACT_HOST)", "브리지에 GPU 박스가 설정돼 있지 않아요(CCLAY_EXTRACT_HOST)", "桥未配置 GPU 机器（CCLAY_EXTRACT_HOST）"],
+	"extract-bridge-required": ["GVHMR extraction requires the local GPU bridge", "GVHMR 추출에는 로컬 GPU 브리지가 필요해요", "GVHMR 提取需要本地 GPU 桥"],
+	"extract-backend-unsupported": ["This bridge is not configured for GVHMR", "이 브리지가 GVHMR로 설정되지 않았어요", "此桥未配置为 GVHMR"],
 	"extract-upload-failed": ["The footage could not be copied to the GPU box", "영상을 GPU 박스로 복사하지 못했어요", "无法把素材复制到 GPU 机器"],
 	"extract-upload-too-large": ["That clip is too large to upload for extraction (300 MB cap)", "추출 업로드 한도(300MB)를 넘는 영상이에요", "该片段太大，超过提取上传上限（300 MB）"],
 	"extract-upload-empty": ["No video bytes arrived at the bridge", "브리지에 영상 데이터가 도착하지 않았어요", "桥没有收到视频数据"],
 	"extract-footage-unknown": ["The bridge no longer holds that download — re-ingest the URL", "브리지에 그 다운로드가 더 이상 없어요 — URL을 다시 넣어 주세요", "桥已不再保存该下载 — 请重新导入网址"],
-	"extract-run-failed": ["SAM-3D-Body failed on the GPU box (see the bridge log)", "GPU 박스에서 SAM-3D-Body 실행이 실패했어요(브리지 로그 확인)", "GPU 机器上 SAM-3D-Body 失败（见桥日志）"],
+	"extract-run-failed": ["GVHMR failed on the GPU box (see the bridge log)", "GPU 박스에서 GVHMR 실행이 실패했어요(브리지 로그 확인)", "GPU 机器上 GVHMR 失败（见桥日志）"],
 	"extract-no-person": ["The GPU box tracked no person in that footage", "GPU 박스가 영상에서 사람을 추적하지 못했어요", "GPU 机器在素材里没有跟踪到人"],
 	"extract-convert-failed": ["The extracted take could not be converted for the timeline", "추출된 테이크를 타임라인용으로 변환하지 못했어요", "提取的镜头无法转成时间轴格式"],
 	"extract-timeout": ["GPU extraction took too long and was stopped", "GPU 추출이 너무 오래 걸려 중단됐어요", "GPU 提取太久，已中止"],
+
 };
 
 // Extraction samples and bakes straight onto the production clock — an
@@ -2587,6 +2592,9 @@ export const DEFAULT_WORKSPACE_LAYOUT = Object.freeze({
 });
 
 export function loadWorkspaceLayout() {
+	// The landing-page playground is a fixed, chrome-less layout: the plan
+	// inset starts folded and nothing the visitor drags is written back.
+	if (isPlaygroundEmbed(globalThis.location?.search)) return { ...DEFAULT_WORKSPACE_LAYOUT, insetCollapsed: true };
 	try {
 		const saved = JSON.parse(localStorage.getItem(WORKSPACE_LAYOUT_KEY) || "null");
 		return saved ? { ...DEFAULT_WORKSPACE_LAYOUT, ...saved } : { ...DEFAULT_WORKSPACE_LAYOUT };
@@ -2599,6 +2607,15 @@ export function loadWorkspaceLayout() {
  * scenes.js; App only supplies the familiar starter set for a truly new room. */
 export function loadSceneStartup() {
 	const defaults = () => DEFAULT_SCENE_OBJECTS.map((object) => ({ ...object, footprint: { ...object.footprint } }));
+	// The landing-page playground never reads or writes the visitor's saved
+	// scenes: it opens the preset the page fetched (or an empty room if that
+	// fetch failed) and saving stays off for the whole session.
+	if (isPlaygroundEmbed(globalThis.location?.search)) {
+		const preset = takePlaygroundProject();
+		const document = preset?.document ?? createSceneDocument();
+		if (!preset?.document) document.scenes[0].objects = defaults();
+		return { document, saveBlocked: true, error: null, startupCreatedScene: false, toast: null };
+	}
 	try {
 		const result = loadSceneDocumentFromStorage(localStorage);
 		if (result.status === "future") {

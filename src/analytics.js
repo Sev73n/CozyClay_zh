@@ -27,12 +27,14 @@ const EVENT_PROPERTIES = Object.freeze({
 	"export:blocking_frame_succeeded": ["format"],
 	"export:video_succeeded": ["format"],
 	"sample:played": ["from"],
+	"playground:opened": [],
+	"playground:first_action": ["action_kind"],
 	"activation:completed": ["activation_path"],
 });
 const FEATURE_NAMES = new Set([
 	"pose_edit", "camera_fly", "orbit", "dolly_rail", "crane_graph", "timeline_scrub",
 	"prompt_block_add", "shot_add", "shot_cut", "export_pose", "export_frame", "export_video",
-	"mcp_connected", "auto_color", "plan_view",
+	"mcp_connected", "auto_color", "plan_view", "camera_tutorial",
 ]);
 const HEARD_FROM_VALUES = new Set(["x", "hn", "reddit", "github", "friend", "other"]);
 const DENIED_PROPERTY_KEYS = new Set(["prompt", "text", "url", "path", "file"]);

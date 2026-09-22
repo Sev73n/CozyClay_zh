@@ -10033,9 +10033,7 @@ function resizePromptClip(id, edge, rawFrame) {
 		<div className={"app" + (renderActive ? "" : " render-idle")} data-workflow-mode={workflowMode} data-embed-mode={embedMode ? "playview" : undefined}>
 			<header className="topbar">
 				<div className="logo">
-					<span className="wordmark">
-						Cozy <span>Clay</span>
-					</span>
+					<span className="wordmark" aria-hidden="true" />
 				</div>
 				<div className="project-menu-wrap">
 					<button
@@ -13080,9 +13078,7 @@ function resizePromptClip(id, edge, rawFrame) {
 		</div>
 
 			<footer className="brandbar">
-				<span className="wordmark">
-					Cozy <span>Clay</span>
-				</span>
+				<span className="wordmark" aria-hidden="true" />
 				<SourceOffer />
 			</footer>
 

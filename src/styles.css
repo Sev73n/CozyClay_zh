@@ -895,15 +895,11 @@ select {
 	min-width: 0;
 }
 .wordmark {
-	font-family: var(--display);
-	font-weight: 750;
-	font-size: 18px;
-	line-height: 1;
-	color: #d2d2d2;
-	letter-spacing: -.045em;
-}
-.wordmark span {
-	color: #3c91a8;
+	display: block;
+	width: 76px;
+	height: 18px;
+	border-radius: 4px;
+	background: #e4e4e4;
 }
 
 .brandbar {
@@ -928,8 +924,8 @@ select {
 }
 
 .brandbar .wordmark {
-	font-size: 14px;
-	letter-spacing: -.035em;
+	width: 56px;
+	height: 14px;
 }
 
 .source-offer {
@@ -5307,7 +5303,8 @@ input[type=range]::-moz-range-thumb {
 		display: none;
 	}
 	.wordmark {
-		font-size: 22px;
+		width: 88px;
+		height: 22px;
 	}
 	.viewport {
 		min-height: 46vh;
